@@ -306,10 +306,14 @@ elif app_mode == "🎓 Live Interactive Tutor & Explainability":
     curr_item: QuestionItem = pstate["current_item"]
 
     # Header Controls
-    col_hdr1, col_hdr2 = st.columns([5, 1])
+    col_hdr1, col_hdr2, col_hdr3 = st.columns([4, 1.2, 1.8])
     with col_hdr2:
         if st.button("🔄 Restart Session"):
             del st.session_state["pomdp_state"]
+            st.rerun()
+    with col_hdr3:
+        if st.button("⏹️ End Session & Survey", type="secondary"):
+            pstate["session_ended"] = True
             st.rerun()
 
     st.markdown("---")
@@ -372,23 +376,70 @@ elif app_mode == "🎓 Live Interactive Tutor & Explainability":
     curr_act_name = action_names[curr_act_idx]
 
     # Mastery Goal Banner
-    if mean_b < 0.90:
+    if mean_b < 0.90 and not pstate.get("session_ended", False):
         st.info(f"🎯 **Mastery Target:** Reaching Mean Skill Belief $\\bar{{b}}_t \\ge 0.90$ | Current: **{mean_b:.2f}** ({min(100.0, (mean_b/0.90)*100):.1f}% of goal)")
 
-    # Check Session Termination (Mastery or Max Steps)
-    if mean_b >= 0.90 or pstate["current_step"] >= pstate["max_steps"]:
+    # Check Session Termination or End Session Trigger
+    if mean_b >= 0.90 or pstate["current_step"] >= pstate["max_steps"] or pstate.get("session_ended", False):
         st.balloons()
         st.success(
-            f"🏆 **EXCELLENT WORK! SESSION COMPLETED!** 🏆\n\n"
+            f"🏆 **SESSION COMPLETED!** 🏆\n\n"
             f"- **Student ID:** `{student_id}` | **Mode:** `{tutor_mode}`\n"
             f"- **Final Mean Skill Belief:** **{mean_b:.3f}** (Target ≥ 0.90)\n"
             f"- **Steps Attempted:** **{pstate['current_step']} steps**\n"
-            f"- **Mastery Status:** {'✅ Absolute Mastery Achieved!' if mean_b >= 0.90 else '⏱️ Completed Max Steps'}"
+            f"- **Mastery Status:** {'✅ Absolute Mastery Achieved!' if mean_b >= 0.90 else '📋 Session Finalized'}"
         )
-        if st.button("Start New Session", type="primary"):
-            del st.session_state["pomdp_state"]
-            st.rerun()
+
+        st.markdown("---")
+        st.subheader("📝 Post-Session Affective Evaluation Survey")
+        st.write("Please complete this quick 30-second evaluation survey to log affective learning metrics.")
+
+        if pstate.get("survey_submitted", False):
+            st.success("✅ **Thank you! Your affective survey and session data have been logged to `data/affective_surveys.csv`.**")
+            if st.button("Start New Session", type="primary"):
+                del st.session_state["pomdp_state"]
+                st.rerun()
+        else:
+            with st.form(key="affective_survey_form"):
+                engagement = st.select_slider(
+                    "1. How engaging did you find this tutoring session?",
+                    options=[1, 2, 3, 4, 5],
+                    value=4,
+                    format_func=lambda x: f"{x} ⭐ - " + {1: "Very Boring", 2: "Boring", 3: "Neutral", 4: "Engaging", 5: "Extremely Engaging"}[x],
+                )
+
+                frustration = st.select_slider(
+                    "2. How frustrated did you feel during the difficult questions?",
+                    options=[1, 2, 3, 4, 5],
+                    value=2,
+                    format_func=lambda x: f"{x} - " + {1: "Not Frustrated At All", 2: "Slightly Frustrated", 3: "Moderately Frustrated", 4: "Frustrated", 5: "Extremely Frustrated"}[x],
+                )
+
+                pacing = st.radio(
+                    "3. Did the system move too fast, too slow, or just right?",
+                    options=["Too Slow", "Just Right", "Too Fast"],
+                    index=1,
+                    horizontal=True,
+                )
+
+                comments = st.text_area("4. Additional comments or suggestions (optional):", value="")
+
+                submit_survey_btn = st.form_submit_button("Submit Survey & Log Data", type="primary")
+
+            if submit_survey_btn:
+                log_affective_survey(
+                    student_id=student_id,
+                    tutor_mode=tutor_mode,
+                    engagement_score=engagement,
+                    frustration_score=frustration,
+                    pacing_feedback=pacing,
+                    comments=comments,
+                )
+                pstate["survey_submitted"] = True
+                st.rerun()
+
         st.stop()
+
 
     # Feedback Banner
     if pstate["last_feedback"] is not None:
