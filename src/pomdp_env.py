@@ -218,24 +218,30 @@ class POMDPTutorEnv(gym.Env):
         self.last_correctness = correctness_val
         self.last_friction = friction
 
-        # --- Calculate Reward via Normalized Learning Gain (NLG) ---
+        # --- Calculate Reward via Multi-Objective Optimization ---
         # NLG = (b_{t+1} - b_t) / (1.0 - b_t)
         denom = max(1e-4, 1.0 - prev_mean_belief)
         nlg = (new_mean_belief - prev_mean_belief) / denom
 
-        # Reward components
-        reward_nlg = 10.0 * nlg
-        penalty_step = -0.05  # Inefficiency penalty per step
-        penalty_hint_spam = -0.3 if self.consecutive_hints > 2 else 0.0
+        # Secondary dense shaping reward
+        reward_nlg = 5.0 * nlg
 
-        all_mastered = bool(np.all(current_beliefs >= 0.95))
-        bonus_mastery = 3.0 if all_mastered else 0.0
+        # Aggressive step penalty to force rapid efficiency and minimize time-on-task
+        penalty_step = -0.50
+
+        # Penalty for over-reliance on hints/worked examples
+        penalty_hint_spam = -1.0 if self.consecutive_hints > 2 else 0.0
+
+        # Massive sparse mastery bonus when mean skill belief crosses 90%
+        mastery_achieved = bool(new_mean_belief >= 0.90)
+        bonus_mastery = 50.0 if mastery_achieved else 0.0
 
         total_reward = float(reward_nlg + penalty_step + penalty_hint_spam + bonus_mastery)
 
-        # Check termination & truncation
-        terminated = all_mastered
+        # Immediate episode termination upon reaching mastery
+        terminated = mastery_achieved
         truncated = self.current_step >= self.max_steps
+
 
         obs = self._get_obs()
         info = self._get_info()
