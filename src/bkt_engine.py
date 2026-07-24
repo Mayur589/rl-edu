@@ -6,9 +6,11 @@ maintains and updates probabilistic belief states over unobservable student skil
 
 from typing import Dict, List, Optional, Union
 import numpy as np
+from src.curriculum import KC_NAMES
 
 
 class BKTParams:
+
     """Parameters governing Bayesian Knowledge Tracing updates for a skill component.
 
     Attributes:
@@ -58,11 +60,8 @@ class BKTEngine:
         beliefs (np.ndarray): Current belief state vector P(L_t = 1) of shape (num_skills,).
     """
 
-    DEFAULT_SKILLS: List[str] = [
-        "Addition & Subtraction",
-        "Multiplication & Division",
-        "Algebra & Exponents",
-    ]
+    DEFAULT_SKILLS: List[str] = list(KC_NAMES)
+
 
     def __init__(
         self,

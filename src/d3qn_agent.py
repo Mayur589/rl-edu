@@ -40,7 +40,8 @@ class DuelingDQN(nn.Module):
         Q(s, a) = V(s) + (A(s, a) - 1/|A| * sum_a' A(s, a'))
     """
 
-    def __init__(self, state_dim: int = 8, action_dim: int = 5, hidden_dim: int = 128) -> None:
+    def __init__(self, state_dim: int = 9, action_dim: int = 5, hidden_dim: int = 128) -> None:
+
         """Initializes DuelingDQN network architecture.
 
         Args:
@@ -180,7 +181,7 @@ class D3QNAgent:
 
     def __init__(
         self,
-        state_dim: int = 8,
+        state_dim: int = 9,
         action_dim: int = 5,
         learning_rate: float = 1e-4,
         gamma: float = 0.99,
@@ -189,6 +190,7 @@ class D3QNAgent:
         seed: int = 42,
         device: Optional[str] = None,
     ) -> None:
+
         """Initializes D3QNAgent.
 
         Args:
@@ -401,7 +403,8 @@ def train_d3qn(
         D3QNAgent: Trained agent instance.
     """
     set_d3qn_seeds(seed)
-    agent = D3QNAgent(state_dim=8, action_dim=5, learning_rate=1e-4, buffer_capacity=100000, seed=seed)
+    agent = D3QNAgent(state_dim=9, action_dim=5, learning_rate=1e-4, buffer_capacity=100000, seed=seed)
+
 
     eps_start = 1.0
     eps_min = 0.05

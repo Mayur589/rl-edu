@@ -268,11 +268,12 @@ class POMDPTutorEnv(gym.Env):
             ANSI formatted string output.
         """
         beliefs = self.bkt_engine.get_beliefs()
+        b_str = ", ".join(f"{b:.2f}" for b in beliefs)
         output = (
             f"Step: {self.current_step:2d}/{self.max_steps:2d} | "
             f"Action: {self.ACTION_MAP.get(self.last_action, 'N/A')} | "
             f"Mean Belief: {self.bkt_engine.get_mean_belief():.3f} | "
-            f"Skill Beliefs: [{beliefs[0]:.2f}, {beliefs[1]:.2f}, {beliefs[2]:.2f}]"
+            f"KC Beliefs: [{b_str}]"
         )
         if self.render_mode in ("human", "ansi"):
             print(output)
@@ -280,10 +281,10 @@ class POMDPTutorEnv(gym.Env):
         return None
 
     def _get_obs(self) -> np.ndarray:
-        """Constructs 8-dimensional observation vector.
+        """Constructs 9-dimensional observation vector.
 
         Returns:
-            np.ndarray: Vector of shape (8,) with dtype float32.
+            np.ndarray: Vector of shape (9,) with dtype float32.
         """
         beliefs = self.bkt_engine.get_beliefs()
         mean_b = self.bkt_engine.get_mean_belief()
@@ -291,20 +292,16 @@ class POMDPTutorEnv(gym.Env):
         norm_step = min(self.current_step / float(self.max_steps), 1.0)
         norm_last_action = self.last_action / 4.0
 
-        obs = np.array(
-            [
-                beliefs[0],
-                beliefs[1],
-                beliefs[2],
-                mean_b,
-                rolling_acc,
-                self.last_friction,
-                norm_step,
-                norm_last_action,
-            ],
-            dtype=np.float32,
-        )
-        return obs
+        obs_list = list(beliefs) + [
+            mean_b,
+            rolling_acc,
+            self.last_friction,
+            norm_step,
+            norm_last_action,
+        ]
+
+        return np.array(obs_list, dtype=np.float32)
+
 
     def _get_info(self) -> Dict[str, Any]:
         """Constructs step info dictionary.

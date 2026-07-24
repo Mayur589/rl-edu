@@ -47,7 +47,7 @@ def test_pomdp_env_space_specification() -> None:
     assert env.action_space.n == 5
 
     obs_shape = env.observation_space.shape
-    assert obs_shape == (8,)
+    assert obs_shape == (9,)
     assert env.observation_space.dtype == np.float32
 
 
@@ -56,10 +56,11 @@ def test_pomdp_env_step_sequence() -> None:
     env = POMDPTutorEnv(max_steps=30)
     obs, info = env.reset(seed=42)
 
-    assert obs.shape == (8,)
+    assert obs.shape == (9,)
     assert np.all(obs >= 0.0) and np.all(obs <= 1.0)
     assert "beliefs" in info
     assert "mean_belief" in info
+
 
     # Step through all 5 discrete actions
     for action in range(5):

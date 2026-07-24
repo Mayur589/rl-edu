@@ -40,11 +40,12 @@ class POMDPHeuristicTutor(BaseTutor):
         Returns:
             int: Selected action index.
         """
-        if len(observation) < 8:
+        if len(observation) < 9:
             return 0
 
-        mean_belief = float(observation[3])
-        last_correct = float(observation[4])
+        mean_belief = float(observation[4])
+        last_correct = float(observation[5])
+
 
         # Rule 1: If mean belief is low, present Worked Example
         if mean_belief < 0.35:
@@ -169,13 +170,18 @@ def run_pomdp_benchmark(
     env = POMDPTutorEnv(max_steps=30)
 
     # 1. Load or train D3QN agent
-    if not os.path.exists(model_path):
-        print(f"Model path '{model_path}' not found. Training D3QN agent...")
-        train_d3qn(env, total_episodes=500, save_path=model_path, seed=seed)
+    d3qn_agent = D3QNAgent(state_dim=9, action_dim=5, seed=seed)
+    try:
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model path {model_path} does not exist.")
+        d3qn_agent.load(model_path)
+    except Exception as e:
+        print(f"Model load failed ({e}). Retraining D3QN agent for 9D environment...")
+        train_d3qn(env, total_episodes=5000, save_path=model_path, seed=seed)
+        d3qn_agent.load(model_path)
 
-    d3qn_agent = D3QNAgent(state_dim=8, action_dim=5, seed=seed)
-    d3qn_agent.load(model_path)
     d3qn_tutor = D3QNTutor(d3qn_agent)
+
 
     random_tutor = RandomTutor(env.action_space, seed=seed)
     heuristic_tutor = POMDPHeuristicTutor()
