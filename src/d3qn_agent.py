@@ -182,9 +182,9 @@ class D3QNAgent:
         self,
         state_dim: int = 8,
         action_dim: int = 5,
-        learning_rate: float = 1e-3,
+        learning_rate: float = 1e-4,
         gamma: float = 0.99,
-        buffer_capacity: int = 50000,
+        buffer_capacity: int = 100000,
         batch_size: int = 64,
         seed: int = 42,
         device: Optional[str] = None,
@@ -383,16 +383,16 @@ class D3QNTutor(BaseTutor):
 
 def train_d3qn(
     env: POMDPTutorEnv,
-    total_episodes: int = 500,
+    total_episodes: int = 5000,
     max_steps_per_ep: int = 30,
     save_path: str = "models/d3qn_tutor.pt",
     seed: int = 42,
 ) -> D3QNAgent:
-    """Trains D3QNAgent on POMDPTutorEnv and saves checkpoint.
+    """Trains D3QNAgent on POMDPTutorEnv over 5,000 episodes and saves checkpoint.
 
     Args:
         env: POMDPTutorEnv environment instance.
-        total_episodes: Number of episodes to train.
+        total_episodes: Number of episodes to train (default 5,000).
         max_steps_per_ep: Maximum steps per episode.
         save_path: Filepath destination for model checkpoint.
         seed: Random seed.
@@ -401,18 +401,23 @@ def train_d3qn(
         D3QNAgent: Trained agent instance.
     """
     set_d3qn_seeds(seed)
-    agent = D3QNAgent(state_dim=8, action_dim=5, seed=seed)
+    agent = D3QNAgent(state_dim=8, action_dim=5, learning_rate=1e-4, buffer_capacity=100000, seed=seed)
 
     eps_start = 1.0
-    eps_end = 0.05
-    eps_decay = 0.992
-
-    epsilon = eps_start
-    target_update_freq = 10  # Update target network every 10 episodes
+    eps_min = 0.05
+    explore_episodes = min(3000, total_episodes)
+    target_update_freq = 20  # Update target network every 20 episodes
 
     print(f"\n--- Training PyTorch D3QN Agent ({total_episodes} Episodes, Seed={seed}) ---")
+    print(f"Exploration Phase: First {explore_episodes} episodes | Exploitation Phase: Remaining {total_episodes - explore_episodes} episodes\n")
 
     for ep in range(1, total_episodes + 1):
+        # Explicit Epsilon Schedule: Linear decay for first 3,000 episodes, constant 0.05 thereafter
+        if ep <= explore_episodes:
+            epsilon = eps_start - (ep / float(explore_episodes)) * (eps_start - eps_min)
+        else:
+            epsilon = eps_min
+
         obs, _ = env.reset(seed=seed + ep)
         ep_reward = 0.0
 
@@ -430,13 +435,11 @@ def train_d3qn(
             if done:
                 break
 
-        epsilon = max(eps_end, epsilon * eps_decay)
-
         if ep % target_update_freq == 0:
             agent.update_target_network()
 
-        if ep % 100 == 0 or ep == total_episodes:
-            print(f"Episode {ep:3d}/{total_episodes} | Ep Reward: {ep_reward:6.2f} | Epsilon: {epsilon:.3f}")
+        if ep % 500 == 0 or ep == total_episodes:
+            print(f"Episode {ep:5d}/{total_episodes} | Ep Reward: {ep_reward:6.2f} | Epsilon: {epsilon:.3f} | Buffer: {len(agent.memory)}")
 
     agent.save(save_path)
     return agent
@@ -444,4 +447,5 @@ def train_d3qn(
 
 if __name__ == "__main__":
     env = POMDPTutorEnv(max_steps=30)
-    train_d3qn(env, total_episodes=500, save_path="models/d3qn_tutor.pt", seed=42)
+    train_d3qn(env, total_episodes=5000, save_path="models/d3qn_tutor.pt", seed=42)
+
