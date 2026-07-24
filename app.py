@@ -14,11 +14,33 @@ import pandas as pd
 import streamlit as st
 import torch
 
+# Force PyTorch single-threading to prevent Streamlit watcher thread segmentation faults on macOS
+torch.set_num_threads(1)
+
 from src.bkt_engine import BKTEngine
 from src.pomdp_env import POMDPTutorEnv
 from src.baselines import RandomTutor
 from src.d3qn_agent import D3QNAgent, D3QNTutor, train_d3qn
 from src.evaluator import POMDPHeuristicTutor, evaluate_pomdp_tutor, run_pomdp_benchmark
+
+
+# --- Model Cache ---
+@st.cache_resource
+def load_d3qn_cached(model_path: str = "models/d3qn_tutor.pt"):
+    """Loads and caches the PyTorch D3QN agent.
+
+    Args:
+        model_path: Path to model pt file.
+
+    Returns:
+        D3QNAgent instance or None.
+    """
+    if os.path.exists(model_path):
+        agent = D3QNAgent(state_dim=8, action_dim=5, device="cpu")
+        agent.load(model_path)
+        agent.online_net.eval()
+        return agent
+    return None
 
 
 # --- Page Configuration & Styling ---

@@ -314,7 +314,11 @@ class D3QNAgent:
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"D3QN model checkpoint not found at: '{filepath}'")
 
-        checkpoint = torch.load(filepath, map_location=self.device)
+        try:
+            checkpoint = torch.load(filepath, map_location=self.device, weights_only=True)
+        except Exception:
+            checkpoint = torch.load(filepath, map_location=self.device)
+
         self.online_net.load_state_dict(checkpoint["online_state_dict"])
         self.target_net.load_state_dict(checkpoint["target_state_dict"])
         if "optimizer_state_dict" in checkpoint:
@@ -322,6 +326,7 @@ class D3QNAgent:
         self.online_net.eval()
         self.target_net.eval()
         print(f"D3QN agent model loaded successfully from '{filepath}'.")
+
 
 
 class D3QNTutor(BaseTutor):
