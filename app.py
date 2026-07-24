@@ -1,27 +1,29 @@
-"""Streamlit Web Application for Reinforcement Learning Intelligent Tutoring System.
+"""Advanced Streamlit Web Application for POMDP-BKT Intelligent Tutoring System.
 
-This module implements an interactive web interface featuring:
-1. Simulation Dashboard: Visualizes training performance and benchmarks DQN vs baselines.
-2. Live Tutor Mode: Real-time adaptive math problem delivery where the DQN agent selects difficulty.
+This application provides:
+1. POMDP-BKT Simulation Dashboard: Benchmarks PyTorch D3QN agent vs baselines with NLG metrics.
+2. Live Interactive Tutor & D3QN Explainability: Real-time BKT multi-skill belief tracking
+   and neural network Q-value / Advantage decomposition for AI decision explainability.
 """
 
 import os
 import random
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import streamlit as st
 import torch
 
-from src.environment import SimulatedStudentEnv
-from src.baselines import RandomTutor, HeuristicTutor
-from src.rl_agent import DQNTutor, train_dqn_agent, load_dqn_agent
-from src.evaluate import evaluate_tutor
+from src.bkt_engine import BKTEngine
+from src.pomdp_env import POMDPTutorEnv
+from src.baselines import RandomTutor
+from src.d3qn_agent import D3QNAgent, D3QNTutor, train_d3qn
+from src.evaluator import POMDPHeuristicTutor, evaluate_pomdp_tutor, run_pomdp_benchmark
 
 
-# --- Page Configuration & Custom CSS ---
+# --- Page Configuration & Styling ---
 st.set_page_config(
-    page_title="RL Intelligent Tutoring System",
+    page_title="POMDP-BKT Intelligent Tutoring System",
     page_icon="🎓",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -31,45 +33,51 @@ st.markdown(
     """
     <style>
     .main-header {
-        font-size: 2.3rem;
-        font-weight: 700;
-        color: #1E293B;
+        font-size: 2.2rem;
+        font-weight: 800;
+        color: #0F172A;
         margin-bottom: 0.2rem;
     }
     .sub-header {
-        font-size: 1.1rem;
-        color: #64748B;
+        font-size: 1.05rem;
+        color: #475569;
         margin-bottom: 1.5rem;
     }
-    .metric-card {
+    .skill-card {
         background-color: #F8FAFC;
         border: 1px solid #E2E8F0;
         border-radius: 10px;
         padding: 1rem;
-        text-align: center;
+        margin-bottom: 0.5rem;
     }
     .question-box {
         background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
-        border-left: 6px solid #3B82F6;
-        border-radius: 8px;
+        border-left: 6px solid #2563EB;
+        border-radius: 10px;
         padding: 1.5rem;
         margin-bottom: 1rem;
     }
-    .feedback-correct {
-        background-color: #DCFCE7;
-        border: 1px solid #86EFAC;
-        color: #166534;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-top: 1rem;
+    .worked-example-box {
+        background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+        border-left: 6px solid #D97706;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        color: #78350F;
     }
-    .feedback-incorrect {
-        background-color: #FEE2E2;
-        border: 1px solid #FCA5A5;
-        color: #991B1B;
+    .hint-box {
+        background-color: #F0FDF4;
+        border: 1px solid #BBF7D0;
         border-radius: 8px;
         padding: 1rem;
-        margin-top: 1rem;
+        margin-bottom: 1rem;
+        color: #166534;
+    }
+    .explain-card {
+        background-color: #F1F5F9;
+        border-radius: 10px;
+        padding: 1.2rem;
+        border: 1px solid #CBD5E1;
     }
     </style>
     """,
@@ -77,425 +85,484 @@ st.markdown(
 )
 
 
-# --- Helper: Math Question Generator ---
-def generate_math_question(difficulty: int) -> Tuple[str, float, str]:
-    """Generates a math problem based on difficulty level.
+# --- Problem & Scaffolding Generator ---
+def generate_pomdp_content(action_idx: int, skill_idx: int) -> Tuple[str, float, str, str]:
+    """Generates problem text, answer, explanation, and hint based on action and skill.
 
     Args:
-        difficulty: Difficulty action index (0: Easy, 1: Medium, 2: Hard).
+        action_idx: Action index in {0, 1, 2, 3, 4}.
+        skill_idx: Target skill index in {0, 1, 2}.
 
     Returns:
-        Tuple[str, float, str]: Question text, numerical answer, explanation text.
+        Tuple[str, float, str, str]: (Prompt, Answer, Explanation, Hint Text).
     """
-    if difficulty == 0:  # Easy: Basic Addition / Subtraction
-        op = random.choice(["+", "-"])
-        if op == "+":
-            a = random.randint(5, 25)
-            b = random.randint(3, 20)
-            ans = float(a + b)
-            q_str = f"What is {a} + {b}?"
-            exp = f"{a} + {b} = {int(ans)}"
-        else:
-            a = random.randint(10, 35)
-            b = random.randint(1, a)
-            ans = float(a - b)
-            q_str = f"What is {a} - {b}?"
-            exp = f"{a} - {b} = {int(ans)}"
+    hint_text = ""
 
-    elif difficulty == 1:  # Medium: Multiplication / Division / Simple Algebra
-        q_type = random.choice(["mult", "div", "alg"])
-        if q_type == "mult":
-            a = random.randint(4, 12)
-            b = random.randint(4, 12)
+    if skill_idx == 0:  # Skill 0: Addition & Subtraction
+        if action_idx == 0:  # Easy
+            a, b = random.randint(5, 20), random.randint(3, 15)
+            ans = float(a + b)
+            prompt = f"What is {a} + {b}?"
+            exp = f"{a} + {b} = {int(ans)}"
+        elif action_idx == 1:  # Medium
+            a, b = random.randint(25, 60), random.randint(15, 45)
+            ans = float(a - b)
+            prompt = f"What is {a} - {b}?"
+            exp = f"{a} - {b} = {int(ans)}"
+        elif action_idx == 2:  # Hard
+            a, b, c = random.randint(15, 40), random.randint(12, 30), random.randint(5, 20)
+            ans = float(a + b - c)
+            prompt = f"Calculate: {a} + {b} - {c}"
+            exp = f"{a} + {b} = {a+b}, then {a+b} - {c} = {int(ans)}"
+        elif action_idx == 3:  # Worked Example
+            a, b = 38, 27
+            ans = 65.0
+            prompt = f"💡 Worked Example: How to add multi-digit numbers like {a} + {b}"
+            exp = f"Step 1: Add units place (8 + 7 = 15).\nStep 2: Carry 1 to tens place (3 + 2 + 1 = 6).\nResult = {int(ans)}"
+        else:  # Action 4: Scaffolding Hint
+            a, b = random.randint(18, 45), random.randint(12, 35)
+            ans = float(a + b)
+            prompt = f"Solve with Hint: What is {a} + {b}?"
+            hint_text = f"💡 Hint: Break {b} into ({b//10*10} + {b%10}). First add {a} + {b//10*10} = {a + b//10*10}."
+            exp = f"{a} + {b} = {int(ans)}"
+
+    elif skill_idx == 1:  # Skill 1: Multiplication & Division
+        if action_idx == 0:  # Easy
+            a, b = random.randint(3, 9), random.randint(2, 6)
             ans = float(a * b)
-            q_str = f"What is {a} × {b}?"
+            prompt = f"What is {a} × {b}?"
             exp = f"{a} × {b} = {int(ans)}"
-        elif q_type == "div":
-            b = random.randint(3, 10)
-            ans = float(random.randint(3, 12))
+        elif action_idx == 1:  # Medium
+            b = random.randint(4, 9)
+            ans = float(random.randint(4, 12))
             a = int(ans * b)
-            q_str = f"What is {a} ÷ {b}?"
+            prompt = f"What is {a} ÷ {b}?"
             exp = f"{a} ÷ {b} = {int(ans)}"
-        else:  # Alg: ax + b = c
-            x_ans = random.randint(2, 9)
-            a = random.randint(2, 5)
-            b = random.randint(1, 15)
+        elif action_idx == 2:  # Hard
+            a, b = random.randint(11, 16), random.randint(6, 12)
+            ans = float(a * b)
+            prompt = f"Calculate: {a} × {b}"
+            exp = f"{a} × {b} = {int(ans)}"
+        elif action_idx == 3:  # Worked Example
+            a, b = 48, 6
+            ans = 8.0
+            prompt = f"💡 Worked Example: How to solve division problems like {a} ÷ {b}"
+            exp = f"Step 1: Find what number multiplied by {b} equals {a}.\nSince {b} × 8 = {a}, {a} ÷ {b} = {int(ans)}."
+        else:  # Action 4: Scaffolding Hint
+            a, b = random.randint(6, 12), random.randint(4, 8)
+            ans = float(a * b)
+            prompt = f"Solve with Hint: What is {a} × {b}?"
+            hint_text = f"💡 Hint: {a} × {b} is the same as adding {a} to itself {b} times."
+            exp = f"{a} × {b} = {int(ans)}"
+
+    else:  # Skill 2: Algebra & Exponents
+        if action_idx == 0:  # Easy
+            base = random.randint(3, 8)
+            ans = float(base * base)
+            prompt = f"What is {base}² ({base} squared)?"
+            exp = f"{base} × {base} = {int(ans)}"
+        elif action_idx == 1:  # Medium
+            x_ans = random.randint(2, 8)
+            a, b = random.randint(2, 5), random.randint(3, 12)
             c = a * x_ans + b
             ans = float(x_ans)
-            q_str = f"Solve for x: {a}x + {b} = {c}"
+            prompt = f"Solve for x: {a}x + {b} = {c}"
             exp = f"{a}x = {c} - {b} = {c - b} ➔ x = {c - b} ÷ {a} = {int(ans)}"
-
-    else:  # Hard: Exponents / Squares / Multi-step Algebra
-        q_type = random.choice(["square", "power", "multi_alg"])
-        if q_type == "square":
-            base = random.randint(6, 15)
-            ans = float(base * base)
-            q_str = f"What is {base}² ({base} squared)?"
-            exp = f"{base} × {base} = {int(ans)}"
-        elif q_type == "power":
-            base = random.randint(2, 5)
-            exp_val = random.randint(3, 4)
-            ans = float(base ** exp_val)
-            q_str = f"What is {base}^{exp_val} ({base} to the power of {exp_val})?"
-            exp = f"{base}^{exp_val} = {int(ans)}"
-        else:  # Multi-step: ax - b = c
-            x_ans = random.randint(3, 12)
-            a = random.randint(3, 7)
-            b = random.randint(5, 20)
+        elif action_idx == 2:  # Hard
+            base, p = random.randint(2, 4), random.randint(3, 4)
+            ans = float(base ** p)
+            prompt = f"What is {base}^{p} ({base} to the power of {p})?"
+            exp = f"{base}^{p} = {int(ans)}"
+        elif action_idx == 3:  # Worked Example
+            prompt = "💡 Worked Example: Solving linear equation 3x + 5 = 20"
+            ans = 5.0
+            exp = "Step 1: Subtract 5 from both sides: 3x = 15.\nStep 2: Divide by 3: x = 5."
+        else:  # Action 4: Scaffolding Hint
+            x_ans = random.randint(3, 9)
+            a, b = random.randint(2, 4), random.randint(4, 15)
             c = a * x_ans - b
             ans = float(x_ans)
-            q_str = f"Solve for x: {a}x - {b} = {c}"
-            exp = f"{a}x = {c} + {b} = {c + b} ➔ x = {c + b} ÷ {a} = {int(ans)}"
+            prompt = f"Solve with Hint: {a}x - {b} = {c}"
+            hint_text = f"💡 Hint: First add {b} to both sides to isolate {a}x."
+            exp = f"{a}x = {c + b} ➔ x = {int(ans)}"
 
-    return q_str, ans, exp
+    return prompt, ans, exp, hint_text
 
 
-# --- Helper: Load or Cache Model ---
+# --- Model Cache ---
 @st.cache_resource
-def get_cached_dqn_model(model_path: str = "models/dqn_tutor.zip"):
-    """Loads and caches the trained DQN model.
+def load_d3qn_cached(model_path: str = "models/d3qn_tutor.pt"):
+    """Loads and caches the PyTorch D3QN agent.
 
     Args:
-        model_path: Path to model zip file.
+        model_path: Path to model pt file.
 
     Returns:
-        Loaded DQN model instance or None if file not found.
+        D3QNAgent instance or None.
     """
     if os.path.exists(model_path):
-        env = SimulatedStudentEnv(max_steps=30)
-        return load_dqn_agent(model_path, env=env)
+        agent = D3QNAgent(state_dim=8, action_dim=5)
+        agent.load(model_path)
+        return agent
     return None
 
 
 # --- App Header ---
-st.markdown('<div class="main-header">🎓 Intelligent Tutoring System (RL-ITS)</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🎓 Research-Grade POMDP Intelligent Tutoring System</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="sub-header">Reinforcement Learning-based Adaptive Question Scheduling powered by Deep Q-Networks (DQN)</div>',
+    '<div class="sub-header">Bayesian Knowledge Tracing (BKT) + PyTorch Dueling Double Deep Q-Network (D3QN) Explainability Engine</div>',
     unsafe_allow_html=True,
 )
 
 # --- Sidebar Navigation ---
 st.sidebar.title("Navigation & Settings")
 app_mode = st.sidebar.radio(
-    "Select Interface Mode:",
-    ["📊 Simulation Dashboard", "🎓 Live Tutor Mode"],
+    "Select Mode:",
+    ["📊 POMDP-BKT Simulation Dashboard", "🎓 Live Interactive Tutor & Explainability"],
 )
 
-model_path = "models/dqn_tutor.zip"
-dqn_model = get_cached_dqn_model(model_path)
+model_path = "models/d3qn_tutor.pt"
+d3qn_agent = load_d3qn_cached(model_path)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Model Status")
-if dqn_model is not None:
-    st.sidebar.success("✅ Trained DQN Model Loaded")
+st.sidebar.subheader("PyTorch D3QN Model")
+if d3qn_agent is not None:
+    st.sidebar.success("✅ PyTorch D3QN Model Loaded (`models/d3qn_tutor.pt`)")
 else:
-    st.sidebar.warning("⚠️ Model Not Found (`models/dqn_tutor.zip`)")
-    if st.sidebar.button("🔨 Train DQN Model Now"):
-        with st.spinner("Training DQN Agent (30,000 steps)..."):
-            env = SimulatedStudentEnv(max_steps=30)
-            train_dqn_agent(env, total_timesteps=30000, seed=42, model_save_path=model_path)
+    st.sidebar.warning("⚠️ Model Not Found")
+    if st.sidebar.button("🔨 Train D3QN Agent Now"):
+        with st.spinner("Training PyTorch D3QN Agent (500 episodes)..."):
+            env = POMDPTutorEnv(max_steps=30)
+            train_d3qn(env, total_episodes=500, save_path=model_path, seed=42)
             st.cache_resource.clear()
             st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.info(
-    "**MDP Formulation:**\n"
-    "- **State Space:** Knowledge level θ, recent accuracy history, difficulty streak.\n"
-    "- **Action Space:** Question Difficulty (Easy = 0.2, Medium = 0.5, Hard = 0.8).\n"
-    "- **Reward:** Learning gain Δθ + ZPD alignment bonus."
+    "**POMDP-BKT Architecture:**\n"
+    "- **Belief State (b_t):** P(L_t) across 3 skills.\n"
+    "- **Actions (5):** Easy/Med/Hard Problem, Worked Example, Scaffolding Hint.\n"
+    "- **Reward:** Normalized Learning Gain (NLG) + time-on-task penalty."
 )
 
 
 # ==============================================================================
-# MODE 1: SIMULATION DASHBOARD
+# MODE 1: POMDP-BKT SIMULATION DASHBOARD
 # ==============================================================================
-if app_mode == "📊 Simulation Dashboard":
-    st.header("📊 Benchmark & Policy Evaluation Dashboard")
+if app_mode == "📊 POMDP-BKT Simulation Dashboard":
+    st.header("📊 Comparative Policy Evaluation Dashboard")
     st.write(
-        "Compare the adaptive performance of the **DQN RL Agent** against baseline tutoring policies "
-        "(Random Tutor and Heuristic Rule-Based Tutor)."
+        "Evaluate the **PyTorch Dueling Double DQN (D3QN)** policy against baseline tutors on the POMDP environment."
     )
 
-    col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([2, 2, 2])
-    with col_ctrl1:
+    c1, c2, c3 = st.columns([2, 2, 2])
+    with c1:
         eval_episodes = st.slider("Evaluation Episodes per Policy:", min_value=10, max_value=100, value=30, step=10)
-    with col_ctrl2:
+    with c2:
         eval_seed = st.number_input("Random Seed:", min_value=1, max_value=9999, value=42, step=1)
-    with col_ctrl3:
+    with c3:
         st.write("")
         st.write("")
-        run_btn = st.button("🚀 Run Full Benchmark", type="primary", use_container_width=True)
+        run_btn = st.button("🚀 Run Benchmark Evaluation", type="primary", use_container_width=True)
 
-    if run_btn or "benchmark_results" in st.session_state:
-        if run_btn or "benchmark_results" not in st.session_state:
-            with st.spinner("Running simulation benchmark across policies..."):
-                env = SimulatedStudentEnv(max_steps=30)
-                random_tutor = RandomTutor(env.action_space, seed=eval_seed)
-                heuristic_tutor = HeuristicTutor(initial_difficulty=1)
-
-                if dqn_model is None:
-                    train_dqn_agent(env, total_timesteps=30000, seed=eval_seed, model_save_path=model_path)
+    if run_btn or "pomdp_results" in st.session_state:
+        if run_btn or "pomdp_results" not in st.session_state:
+            with st.spinner("Running POMDP-BKT evaluation benchmark..."):
+                if d3qn_agent is None:
+                    env = POMDPTutorEnv(max_steps=30)
+                    train_d3qn(env, total_episodes=500, save_path=model_path, seed=eval_seed)
                     st.cache_resource.clear()
-                    dqn_model = get_cached_dqn_model(model_path)
+                    d3qn_agent = load_d3qn_cached(model_path)
 
-                dqn_tutor = DQNTutor(dqn_model, deterministic=True)
+                df, raw = run_pomdp_benchmark(n_episodes=eval_episodes, seed=eval_seed, model_path=model_path)
+                st.session_state["pomdp_results"] = (df, raw)
 
-                rand_res = evaluate_tutor(random_tutor, env, n_episodes=eval_episodes, seed=eval_seed)
-                heur_res = evaluate_tutor(heuristic_tutor, env, n_episodes=eval_episodes, seed=eval_seed)
-                dqn_res = evaluate_tutor(dqn_tutor, env, n_episodes=eval_episodes, seed=eval_seed)
+        df, results = st.session_state["pomdp_results"]
 
-                st.session_state["benchmark_results"] = {
-                    "Random Tutor": rand_res,
-                    "Heuristic Tutor": heur_res,
-                    "DQN Tutor (RL)": dqn_res,
-                }
+        # Metric summary cards
+        st.subheader("🏆 Policy Performance Summary")
+        col_m1, col_m2, col_m3 = st.columns(3)
 
-        results = st.session_state["benchmark_results"]
-
-        # --- Benchmark Metrics Comparison Cards ---
-        st.subheader("🏆 Policy Benchmark Summary")
-        m_col1, m_col2, m_col3 = st.columns(3)
-
-        for col, (policy_name, res) in zip([m_col1, m_col2, m_col3], results.items()):
+        for col, (policy_name, res) in zip([col_m1, col_m2, col_m3], results.items()):
             with col:
                 st.markdown(f"### {policy_name}")
-                st.metric("Mean Cumulative Reward", f"{res['mean_reward']:.2f}", delta=f"± {res['std_reward']:.2f}")
-                st.metric("Final Student Knowledge (θ)", f"{res['mean_final_knowledge']:.3f}", delta=f"± {res['std_final_knowledge']:.3f}")
-                st.metric("Average Answer Accuracy", f"{res['mean_accuracy'] * 100:.1f}%")
-                st.metric("Mastery Rate (θ ≥ 0.95)", f"{res['mastery_rate'] * 100:.1f}%")
+                st.metric("Mean Reward", f"{res['mean_reward']:.2f}", delta=f"± {res['std_reward']:.2f}")
+                st.metric("Mean Normalized Learning Gain (NLG)", f"{res['mean_nlg']:.3f}", delta=f"± {res['std_nlg']:.3f}")
+                st.metric("Final Skill Belief P(L_t)", f"{res['mean_final_belief']:.3f}", delta=f"± {res['std_final_belief']:.3f}")
+                st.metric("Mastery Rate", f"{res['mastery_rate'] * 100:.1f}%")
 
         st.markdown("---")
 
-        # --- Trajectory Line Chart ---
-        st.subheader("📈 Student Knowledge Progression Trajectory (Average across Episodes)")
-
-        # Compute average knowledge state at each step (0 to 30) for each policy
+        # Line chart of belief trajectory
+        st.subheader("📈 Multi-Skill Belief Trajectory Progression")
         max_len = 31
         traj_df = pd.DataFrame({"Step": list(range(max_len))})
 
         for policy_name, res in results.items():
-            trajs = res["knowledge_trajectories"]
-            padded_trajs = []
-            for t in trajs:
-                # pad or slice to max_len
-                if len(t) < max_len:
-                    t = t + [t[-1]] * (max_len - len(t))
-                padded_trajs.append(t[:max_len])
-            mean_traj = np.mean(padded_trajs, axis=0)
-            traj_df[policy_name] = mean_traj
+            padded = [
+                t + [t[-1]] * (max_len - len(t)) if len(t) < max_len else t[:max_len]
+                for t in res["belief_trajectories"]
+            ]
+            traj_df[policy_name] = np.mean(padded, axis=0)
 
-        traj_chart_data = traj_df.set_index("Step")
-        st.line_chart(traj_chart_data, use_container_width=True)
+        st.line_chart(traj_df.set_index("Step"), use_container_width=True)
 
-        # --- Difficulty Action Distribution Bar Chart ---
-        st.subheader("🎯 Difficulty Action Choice Distribution")
-        diff_counts = {}
-        diff_names = {0: "Easy (0.2)", 1: "Medium (0.5)", 2: "Hard (0.8)"}
-
-        for policy_name, res in results.items():
-            all_actions = [a for episode_actions in res["difficulty_trajectories"] for a in episode_actions]
-            total_actions = max(1, len(all_actions))
-            diff_counts[policy_name] = {
-                diff_names[a_idx]: (all_actions.count(a_idx) / total_actions) * 100 for a_idx in [0, 1, 2]
-            }
-
-        diff_df = pd.DataFrame(diff_counts)
-        st.bar_chart(diff_df, use_container_width=True)
+        # Artifact plots display
+        st.subheader("🖼️ Generated Analysis Artifacts")
+        img_c1, img_c2 = st.columns(2)
+        with img_c1:
+            if os.path.exists("artifacts/pomdp_belief_trajectories.png"):
+                st.image("artifacts/pomdp_belief_trajectories.png", caption="Belief Trajectories Comparison")
+        with img_c2:
+            if os.path.exists("artifacts/pomdp_nlg_comparison.png"):
+                st.image("artifacts/pomdp_nlg_comparison.png", caption="Reward vs. NLG Comparison")
 
 
 # ==============================================================================
-# MODE 2: LIVE TUTOR MODE (INTERACTIVE HUMAN PRACTICE)
+# MODE 2: LIVE INTERACTIVE TUTOR & D3QN EXPLAINABILITY
 # ==============================================================================
-elif app_mode == "🎓 Live Tutor Mode":
-    st.header("🎓 Interactive Live Math Tutor")
+elif app_mode == "🎓 Live Interactive Tutor & Explainability":
+    st.header("🎓 Interactive Live Math Practice & D3QN AI Explainability")
     st.write(
-        "Experience the Intelligent Tutor in real-time! As you answer math questions, the loaded **DQN RL Agent** "
-        "evaluates your state and dynamically adapts the problem difficulty."
+        "Practice math while the **Bayesian Knowledge Tracing (BKT)** engine updates your skill beliefs in real-time, "
+        "and inspect the **D3QN Neural Network's** internal State Value $V(s)$ and Advantage $A(s, a)$ decomposition."
     )
 
-    if dqn_model is None:
-        st.error("⚠️ Trained DQN Model (`models/dqn_tutor.zip`) is missing. Please train the model from the sidebar first.")
+    if d3qn_agent is None:
+        st.error("⚠️ Trained D3QN Model (`models/d3qn_tutor.pt`) is missing. Please train the model from the sidebar first.")
         st.stop()
 
-    # --- Session State Initialization ---
-    if "tutor_state" not in st.session_state:
-        st.session_state["tutor_state"] = {
-            "student_knowledge": 0.20,
-            "last_difficulty": 0.0,
-            "last_correctness": 0.0,
+    d3qn_tutor = D3QNTutor(d3qn_agent)
+
+    # Initialize Session State
+    if "pomdp_state" not in st.session_state:
+        bkt = BKTEngine(seed=42)
+        init_beliefs = bkt.reset()
+        st.session_state["pomdp_state"] = {
+            "bkt_engine": bkt,
             "recent_history": [],
-            "consecutive_correct": 0,
-            "consecutive_incorrect": 0,
+            "last_action": 0,
+            "last_correctness": 0.0,
+            "last_friction": 0.0,
             "current_step": 0,
             "max_steps": 20,
             "score": 0,
-            "current_action": 1,  # Start at Medium
-            "current_question": None,
+            "current_action": 0,
+            "target_skill_idx": 0,
+            "current_prompt": None,
             "current_answer": None,
             "current_explanation": None,
+            "current_hint": None,
             "last_feedback": None,
         }
-        # Generate first question
-        q_str, ans, exp = generate_math_question(1)
-        st.session_state["tutor_state"]["current_question"] = q_str
-        st.session_state["tutor_state"]["current_answer"] = ans
-        st.session_state["tutor_state"]["current_explanation"] = exp
+        # First action prediction
+        obs = np.array([init_beliefs[0], init_beliefs[1], init_beliefs[2], float(np.mean(init_beliefs)), 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
+        act = d3qn_tutor.select_action(obs)
+        st.session_state["pomdp_state"]["current_action"] = act
+        p, a, e, h = generate_pomdp_content(act, 0)
+        st.session_state["pomdp_state"]["current_prompt"] = p
+        st.session_state["pomdp_state"]["current_answer"] = a
+        st.session_state["pomdp_state"]["current_explanation"] = e
+        st.session_state["pomdp_state"]["current_hint"] = h
 
-    state = st.session_state["tutor_state"]
+    pstate = st.session_state["pomdp_state"]
+    bkt = pstate["bkt_engine"]
+    beliefs = bkt.get_beliefs()
+    mean_b = bkt.get_mean_belief()
 
-    # Top Control Bar & Reset Button
-    col_reset1, col_reset2 = st.columns([5, 1])
-    with col_reset2:
-        if st.button("🔄 Restart Practice Session"):
-            del st.session_state["tutor_state"]
+    # Reset Button
+    col_hdr1, col_hdr2 = st.columns([5, 1])
+    with col_hdr2:
+        if st.button("🔄 Restart Practice"):
+            del st.session_state["pomdp_state"]
             st.rerun()
 
-    # Progress & Knowledge Dashboard Header
     st.markdown("---")
-    col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
 
-    with col_stat1:
-        st.metric("Questions Attempted", f"{state['current_step']} / {state['max_steps']}")
+    # --- Live Multi-Skill BKT Belief Dashboard ---
+    st.subheader("🧠 Live Bayesian Knowledge Tracing (BKT) Skill Beliefs")
+    b_col1, b_col2, b_col3, b_col4 = st.columns(4)
 
-    with col_stat2:
-        st.metric("Estimated Knowledge (θ)", f"{state['student_knowledge']:.2f}")
+    skill_names = bkt.skills
+    with b_col1:
+        st.metric(f"➕ {skill_names[0]}", f"{beliefs[0]:.2f}")
+        st.progress(float(beliefs[0]))
+    with b_col2:
+        st.metric(f"✖️ {skill_names[1]}", f"{beliefs[1]:.2f}")
+        st.progress(float(beliefs[1]))
+    with b_col3:
+        st.metric(f"📐 {skill_names[2]}", f"{beliefs[2]:.2f}")
+        st.progress(float(beliefs[2]))
+    with b_col4:
+        st.metric("🌟 Overall Mean Belief (b_t)", f"{mean_b:.2f}")
+        st.progress(float(mean_b))
 
-    with col_stat3:
-        st.metric("Current Score", f"{state['score']}")
+    st.markdown("---")
 
-    with col_stat4:
-        diff_labels = {0: "🟢 Easy", 1: "🟡 Medium", 2: "🔴 Hard"}
-        st.metric("DQN Next Difficulty", diff_labels[state["current_action"]])
+    # Construct Current State Vector for Explainability
+    rolling_acc = float(np.mean(pstate["recent_history"])) if pstate["recent_history"] else 0.0
+    norm_step = min(pstate["current_step"] / float(pstate["max_steps"]), 1.0)
+    norm_last_act = pstate["last_action"] / 4.0
 
-    # Knowledge Progress Bar
-    st.write("**Student Mastery Level Progress:**")
-    st.progress(float(min(1.0, max(0.0, state["student_knowledge"]))))
+    current_obs = np.array(
+        [beliefs[0], beliefs[1], beliefs[2], mean_b, rolling_acc, pstate["last_friction"], norm_step, norm_last_act],
+        dtype=np.float32,
+    )
 
-    # Check if session completed
-    if state["student_knowledge"] >= 0.95 or state["current_step"] >= state["max_steps"]:
+    # Decompose D3QN values
+    v_s, adv_list, q_list = d3qn_tutor.predict_explainability(current_obs)
+
+    # --- D3QN Neural Network Explainability Panel ---
+    with st.expander("🔍 **D3QN Neural Network Explainability & Action Q-Values**", expanded=True):
+        ex_col1, ex_col2 = st.columns([1, 2])
+        with ex_col1:
+            st.markdown(f"#### State Value V(s)")
+            st.metric("V(s) Expected Return", f"{v_s:.3f}")
+            st.caption("Estimated cumulative learning return from current student state.")
+
+        with ex_col2:
+            st.markdown("#### Action Q-Values & Advantage A(s, a) Breakdown")
+            action_labels = ["Easy Problem", "Medium Problem", "Hard Problem", "Worked Example", "Scaffolding Hint"]
+            q_df = pd.DataFrame({
+                "Action": action_labels,
+                "Advantage A(s,a)": [round(a, 3) for a in adv_list],
+                "Q-Value Q(s,a)": [round(q, 3) for q in q_list],
+            }).set_index("Action")
+            st.bar_chart(q_df["Q-Value Q(s,a)"], use_container_width=True)
+
+    action_names = ["Easy Problem", "Medium Problem", "Hard Problem", "Worked Example", "Scaffolding Hint"]
+    curr_act_idx = pstate["current_action"]
+    curr_act_name = action_names[curr_act_idx]
+
+    # Check Mastery
+    if mean_b >= 0.95 or pstate["current_step"] >= pstate["max_steps"]:
         st.balloons()
         st.success(
             f"🎉 **Practice Session Complete!**\n\n"
-            f"- **Final Knowledge Level:** {state['student_knowledge']:.3f}\n"
-            f"- **Total Score:** {state['score']} / {state['current_step']}\n"
-            f"- **Mastery Status:** {'Achieved (θ ≥ 0.95)!' if state['student_knowledge'] >= 0.95 else 'Completed Max Steps'}"
+            f"- **Final Mean Skill Belief:** {mean_b:.3f}\n"
+            f"- **Questions Attempted:** {pstate['current_step']}\n"
+            f"- **Mastery Status:** {'Achieved (b_t ≥ 0.95)!' if mean_b >= 0.95 else 'Max Steps Reached'}"
         )
         if st.button("Start New Session", type="primary"):
-            del st.session_state["tutor_state"]
+            del st.session_state["pomdp_state"]
             st.rerun()
         st.stop()
 
-    # --- Last Question Feedback Banner ---
-    if state["last_feedback"] is not None:
-        fb = state["last_feedback"]
+    # Feedback Banner
+    if pstate["last_feedback"] is not None:
+        fb = pstate["last_feedback"]
         if fb["is_correct"]:
+            st.success(f"✅ **Correct!** Explanation: *{fb['explanation']}* | Skill Belief Gain: **+{fb['delta_b']:.3f}**")
+        else:
+            st.error(f"❌ **Incorrect.** Correct answer: **{fb['correct_ans']}**. Explanation: *{fb['explanation']}*")
+
+    # Present Action Content (Worked Example vs Problem vs Hint)
+    st.markdown(f"### Current Step {pstate['current_step'] + 1} | Selected Action: **{curr_act_name}**")
+
+    if curr_act_idx == 3:  # Worked Example Action
+        st.markdown(
+            f'<div class="worked-example-box">'
+            f'<h2>{pstate["current_prompt"]}</h2>'
+            f'<p>{pstate["current_explanation"]}</p>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("I have studied this example ➔ Continue", type="primary"):
+            # Update BKT with worked example benefit
+            prev_b = bkt.get_mean_belief()
+            t_skill = pstate["target_skill_idx"]
+            bkt.update_belief(t_skill, is_correct=True, receives_scaffolding=True)
+            new_b = bkt.get_mean_belief()
+
+            pstate["current_step"] += 1
+            pstate["last_action"] = 3
+            pstate["last_friction"] = 0.2
+            pstate["last_feedback"] = {
+                "is_correct": True,
+                "correct_ans": "Studied Example",
+                "explanation": pstate["current_explanation"],
+                "delta_b": new_b - prev_b,
+            }
+
+            # Predict next action
+            next_obs = np.array(
+                [bkt.beliefs[0], bkt.beliefs[1], bkt.beliefs[2], new_b, 1.0, 0.2, min(pstate["current_step"]/30.0, 1.0), 3.0/4.0],
+                dtype=np.float32,
+            )
+            next_act = d3qn_tutor.select_action(next_obs)
+            next_target_skill = int(np.argmin(bkt.get_beliefs()))
+            pstate["current_action"] = next_act
+            pstate["target_skill_idx"] = next_target_skill
+
+            p, a, e, h = generate_pomdp_content(next_act, next_target_skill)
+            pstate["current_prompt"] = p
+            pstate["current_answer"] = a
+            pstate["current_explanation"] = e
+            pstate["current_hint"] = h
+            st.rerun()
+
+    else:  # Problem Actions (0, 1, 2) or Hint Action (4)
+        if curr_act_idx == 4 and pstate["current_hint"]:
             st.markdown(
-                f'<div class="feedback-correct">✅ <b>Correct!</b> Excellent work. '
-                f'Explanation: <i>{fb["explanation"]}</i> | Knowledge gained: <b>+{fb["delta_k"]:.3f}</b></div>',
+                f'<div class="hint-box"><h4>{pstate["current_hint"]}</h4></div>',
                 unsafe_allow_html=True,
             )
-        else:
-            st.markdown(
-                f'<div class="feedback-incorrect">❌ <b>Incorrect.</b> Your answer was {fb["user_ans"]}. '
-                f'Correct answer: <b>{fb["correct_ans"]}</b>. Explanation: <i>{fb["explanation"]}</i></div>',
-                unsafe_allow_html=True,
-            )
-        st.write("")
 
-    # --- Present Current Question ---
-    st.markdown(
-        f'<div class="question-box">'
-        f'<h3>Question {state["current_step"] + 1} (Difficulty: {diff_labels[state["current_action"]]})</h3>'
-        f'<h2 style="color: #1E40AF;">{state["current_question"]}</h2>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
+        st.markdown(
+            f'<div class="question-box"><h2>{pstate["current_prompt"]}</h2></div>',
+            unsafe_allow_html=True,
+        )
 
-    # Answer Input Form with Validation
-    with st.form(key="answer_form", clear_on_submit=True):
-        user_input_str = st.text_input("Enter your numerical answer (e.g. 12, 3.5):", key="user_answer_input")
-        submit_btn = st.form_submit_button("Submit Answer", type="primary")
+        with st.form(key="pomdp_answer_form", clear_on_submit=True):
+            user_input_str = st.text_input("Enter your numerical answer:", key="pomdp_ans_input")
+            submit_btn = st.form_submit_button("Submit Answer", type="primary")
 
-    if submit_btn:
-        cleaned_input = user_input_str.strip()
-        if not cleaned_input:
-            st.warning("Please enter an answer before submitting.")
-        else:
-            try:
-                user_val = float(cleaned_input)
-                expected_val = float(state["current_answer"])
-                is_correct = abs(user_val - expected_val) < 1e-3
-                correctness_val = 1.0 if is_correct else 0.0
+        if submit_btn:
+            cleaned = user_input_str.strip()
+            if not cleaned:
+                st.warning("Please enter a response.")
+            else:
+                try:
+                    user_val = float(cleaned)
+                    expected_val = float(pstate["current_answer"])
+                    is_correct = abs(user_val - expected_val) < 1e-3
+                    correctness_val = 1.0 if is_correct else 0.0
 
-                diff_val_map = {0: 0.2, 1: 0.5, 2: 0.8}
-                d_val = diff_val_map[state["current_action"]]
+                    prev_b = bkt.get_mean_belief()
+                    t_skill = pstate["target_skill_idx"]
+                    bkt.update_belief(t_skill, is_correct=is_correct, receives_scaffolding=(curr_act_idx == 4))
+                    new_b = bkt.get_mean_belief()
 
-                # Update Student Knowledge State in session
-                prev_k = state["student_knowledge"]
-                if is_correct:
-                    learning_gain = 0.15 * (1.0 - prev_k) * d_val
-                    new_k = min(1.0, prev_k + learning_gain)
-                    state["consecutive_correct"] += 1
-                    state["consecutive_incorrect"] = 0
-                    state["score"] += 1
-                else:
-                    attempt_gain = 0.02 * (1.0 - prev_k)
-                    new_k = min(1.0, prev_k + attempt_gain)
-                    state["consecutive_incorrect"] += 1
-                    state["consecutive_correct"] = 0
+                    pstate["recent_history"].append(correctness_val)
+                    if len(pstate["recent_history"]) > 5:
+                        pstate["recent_history"].pop(0)
 
-                state["student_knowledge"] = float(new_k)
-                delta_k = new_k - prev_k
+                    pstate["last_action"] = curr_act_idx
+                    pstate["last_friction"] = 0.4 if is_correct else 0.8
+                    pstate["current_step"] += 1
+                    pstate["last_feedback"] = {
+                        "is_correct": is_correct,
+                        "correct_ans": int(expected_val) if expected_val.is_integer() else expected_val,
+                        "explanation": pstate["current_explanation"],
+                        "delta_b": new_b - prev_b,
+                    }
 
-                # Update history
-                state["recent_history"].append(correctness_val)
-                if len(state["recent_history"]) > 5:
-                    state["recent_history"].pop(0)
+                    # Predict Next Action
+                    next_obs = np.array(
+                        [bkt.beliefs[0], bkt.beliefs[1], bkt.beliefs[2], new_b, float(np.mean(pstate["recent_history"])), pstate["last_friction"], min(pstate["current_step"]/30.0, 1.0), curr_act_idx/4.0],
+                        dtype=np.float32,
+                    )
+                    next_act = d3qn_tutor.select_action(next_obs)
+                    next_target_skill = int(np.argmin(bkt.get_beliefs()))
+                    pstate["current_action"] = next_act
+                    pstate["target_skill_idx"] = next_target_skill
 
-                state["last_difficulty"] = d_val
-                state["last_correctness"] = correctness_val
-                state["current_step"] += 1
+                    p, a, e, h = generate_pomdp_content(next_act, next_target_skill)
+                    pstate["current_prompt"] = p
+                    pstate["current_answer"] = a
+                    pstate["current_explanation"] = e
+                    pstate["current_hint"] = h
+                    st.rerun()
 
-                # Save feedback for rendering
-                state["last_feedback"] = {
-                    "is_correct": is_correct,
-                    "user_ans": cleaned_input,
-                    "correct_ans": int(expected_val) if expected_val.is_integer() else expected_val,
-                    "explanation": state["current_explanation"],
-                    "delta_k": delta_k,
-                }
-
-                # Construct Observation Vector for DQN Agent
-                rolling_acc = float(np.mean(state["recent_history"])) if state["recent_history"] else 0.0
-                norm_correct = min(state["consecutive_correct"] / 5.0, 1.0)
-                norm_incorrect = min(state["consecutive_incorrect"] / 5.0, 1.0)
-                norm_step = min(state["current_step"] / float(state["max_steps"]), 1.0)
-
-                obs = np.array(
-                    [
-                        state["student_knowledge"],
-                        state["last_difficulty"],
-                        state["last_correctness"],
-                        rolling_acc,
-                        norm_correct,
-                        norm_incorrect,
-                        norm_step,
-                    ],
-                    dtype=np.float32,
-                )
-
-                # Predict next question difficulty using loaded DQN model!
-                action_pred, _ = dqn_model.predict(obs, deterministic=True)
-                next_action = int(action_pred)
-                state["current_action"] = next_action
-
-                # Generate Next Question
-                next_q, next_ans, next_exp = generate_math_question(next_action)
-                state["current_question"] = next_q
-                state["current_answer"] = next_ans
-                state["current_explanation"] = next_exp
-
-                st.rerun()
-
-            except ValueError:
-                st.error("Invalid input! Please enter a valid number (e.g. 12 or 4.5).")
+                except ValueError:
+                    st.error("Invalid numerical input! Please enter a valid number.")
