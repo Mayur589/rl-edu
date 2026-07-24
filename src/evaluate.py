@@ -5,11 +5,13 @@ across multiple simulated episodes, recording cumulative rewards, learning gains
 accuracy, mastery rates, and trajectory data.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+import os
 import numpy as np
 import pandas as pd
 from src.environment import SimulatedStudentEnv
 from src.baselines import BaseTutor, RandomTutor, HeuristicTutor
+from src.rl_agent import DQNTutor, train_dqn_agent, load_dqn_agent
 
 
 def evaluate_tutor(
@@ -103,56 +105,87 @@ def evaluate_tutor(
     return results
 
 
-def run_baseline_comparison(
-    n_episodes: int = 50, seed: int = 42
-) -> pd.DataFrame:
-    """Runs evaluation benchmark comparing Random and Heuristic baselines.
+def run_full_evaluation(
+    n_episodes: int = 50,
+    seed: int = 42,
+    model_path: str = "models/dqn_tutor.zip",
+    retrain_if_missing: bool = True,
+) -> Tuple[pd.DataFrame, Dict[str, Dict[str, Any]]]:
+    """Runs evaluation benchmark comparing Random, Heuristic, and RL (DQN) tutors.
 
     Args:
-        n_episodes: Number of test episodes per baseline.
+        n_episodes: Number of test episodes per tutor policy.
         seed: Random seed for reproducibility.
+        model_path: Path to trained DQN model zip file.
+        retrain_if_missing: If True, trains DQN model if model_path does not exist.
 
     Returns:
-        pd.DataFrame: Summary comparison table.
+        Tuple containing:
+            - pd.DataFrame: Summary comparison table.
+            - Dict[str, Dict[str, Any]]: Full metrics and trajectory data keyed by tutor name.
     """
     env = SimulatedStudentEnv(max_steps=30)
+
+    # 1. Load or train DQN Agent
+    if not os.path.exists(model_path):
+        if retrain_if_missing:
+            print(f"Model not found at '{model_path}'. Training new DQN agent...")
+            train_dqn_agent(env, total_timesteps=30000, seed=seed, model_save_path=model_path)
+        else:
+            raise FileNotFoundError(f"Model path '{model_path}' does not exist.")
+
+    dqn_model = load_dqn_agent(model_path, env=env)
+    dqn_tutor = DQNTutor(dqn_model, deterministic=True)
 
     random_tutor = RandomTutor(env.action_space, seed=seed)
     heuristic_tutor = HeuristicTutor(initial_difficulty=1)
 
-    print(f"\n--- Running Baseline Evaluation ({n_episodes} Episodes, Seed={seed}) ---")
+    print(f"\n--- Running Full Evaluation Benchmark ({n_episodes} Episodes, Seed={seed}) ---")
 
-    rand_results = evaluate_tutor(random_tutor, env, n_episodes=n_episodes, seed=seed)
-    heur_results = evaluate_tutor(heuristic_tutor, env, n_episodes=n_episodes, seed=seed)
+    rand_res = evaluate_tutor(random_tutor, env, n_episodes=n_episodes, seed=seed)
+    heur_res = evaluate_tutor(heuristic_tutor, env, n_episodes=n_episodes, seed=seed)
+    dqn_res = evaluate_tutor(dqn_tutor, env, n_episodes=n_episodes, seed=seed)
+
+    all_raw_results = {
+        "Random Tutor": rand_res,
+        "Heuristic Tutor": heur_res,
+        "DQN Tutor (RL)": dqn_res,
+    }
 
     summary_data = {
-        "Policy": ["Random Tutor", "Heuristic Tutor"],
+        "Policy": ["Random Tutor", "Heuristic Tutor", "DQN Tutor (RL)"],
         "Mean Reward": [
-            f"{rand_results['mean_reward']:.2f} ± {rand_results['std_reward']:.2f}",
-            f"{heur_results['mean_reward']:.2f} ± {heur_results['std_reward']:.2f}",
+            f"{rand_res['mean_reward']:.2f} ± {rand_res['std_reward']:.2f}",
+            f"{heur_res['mean_reward']:.2f} ± {heur_res['std_reward']:.2f}",
+            f"{dqn_res['mean_reward']:.2f} ± {dqn_res['std_reward']:.2f}",
         ],
         "Final Knowledge": [
-            f"{rand_results['mean_final_knowledge']:.3f} ± {rand_results['std_final_knowledge']:.3f}",
-            f"{heur_results['mean_final_knowledge']:.3f} ± {heur_results['std_final_knowledge']:.3f}",
+            f"{rand_res['mean_final_knowledge']:.3f} ± {rand_res['std_final_knowledge']:.3f}",
+            f"{heur_res['mean_final_knowledge']:.3f} ± {heur_res['std_final_knowledge']:.3f}",
+            f"{dqn_res['mean_final_knowledge']:.3f} ± {dqn_res['std_final_knowledge']:.3f}",
         ],
         "Accuracy": [
-            f"{rand_results['mean_accuracy'] * 100:.1f}%",
-            f"{heur_results['mean_accuracy'] * 100:.1f}%",
+            f"{rand_res['mean_accuracy'] * 100:.1f}%",
+            f"{heur_res['mean_accuracy'] * 100:.1f}%",
+            f"{dqn_res['mean_accuracy'] * 100:.1f}%",
         ],
         "Mastery Rate": [
-            f"{rand_results['mastery_rate'] * 100:.1f}%",
-            f"{heur_results['mastery_rate'] * 100:.1f}%",
+            f"{rand_res['mastery_rate'] * 100:.1f}%",
+            f"{heur_res['mastery_rate'] * 100:.1f}%",
+            f"{dqn_res['mastery_rate'] * 100:.1f}%",
         ],
         "Mean Steps": [
-            f"{rand_results['mean_steps']:.1f}",
-            f"{heur_results['mean_steps']:.1f}",
+            f"{rand_res['mean_steps']:.1f}",
+            f"{heur_res['mean_steps']:.1f}",
+            f"{dqn_res['mean_steps']:.1f}",
         ],
     }
 
     df = pd.DataFrame(summary_data)
     print("\n" + df.to_string(index=False))
-    return df
+    return df, all_raw_results
 
 
 if __name__ == "__main__":
-    run_baseline_comparison()
+    run_full_evaluation()
+
