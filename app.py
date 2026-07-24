@@ -7,9 +7,17 @@ This application provides:
 """
 
 import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 import random
 import time
 from typing import Any, Dict, List, Optional, Tuple
+import matplotlib
+matplotlib.use("Agg")  # Prevent GUI thread crashes on macOS
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -17,6 +25,8 @@ import torch
 
 # Force PyTorch single-threading to prevent Streamlit watcher thread segmentation faults on macOS
 torch.set_num_threads(1)
+torch.set_grad_enabled(False)
+
 
 from src.bkt_engine import BKTEngine
 from src.pomdp_env import POMDPTutorEnv

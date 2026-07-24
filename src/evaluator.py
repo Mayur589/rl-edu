@@ -6,14 +6,23 @@ statistical comparison summaries and saves graphical analysis charts to `artifac
 """
 
 import os
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")  # Non-interactive backend to prevent macOS GUI thread segfaults
 import matplotlib.pyplot as plt
 
 from src.pomdp_env import POMDPTutorEnv
 from src.baselines import BaseTutor, RandomTutor, HeuristicTutor
 from src.d3qn_agent import D3QNAgent, D3QNTutor, train_d3qn
+
 
 
 class POMDPHeuristicTutor(BaseTutor):
@@ -272,6 +281,8 @@ def run_pomdp_benchmark(
     plt.title("Reward vs. Normalized Learning Gain (NLG) Comparison", fontsize=13, fontweight="bold")
     fig.tight_layout()
     plt.savefig(os.path.join(artifacts_dir, "pomdp_nlg_comparison.png"), dpi=200)
+    plt.close("all")
+
     plt.close()
 
     print(f"\nGraphical benchmark charts saved to '{artifacts_dir}/'.")
