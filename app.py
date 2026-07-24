@@ -456,19 +456,25 @@ elif app_mode == "🎓 Live Interactive Tutor & Explainability":
     curr_act_idx = pstate["current_action"]
     curr_act_name = action_names[curr_act_idx]
 
-    # Check Mastery
-    if mean_b >= 0.95 or pstate["current_step"] >= pstate["max_steps"]:
+    # Mastery Goal Banner
+    if mean_b < 0.90:
+        st.info(f"🎯 **Mastery Target:** Reaching Mean Skill Belief $\\bar{{b}}_t \\ge 0.90$ | Current: **{mean_b:.2f}** ({min(100.0, (mean_b/0.90)*100):.1f}% of goal)")
+
+    # Check Mastery Achievement
+    if mean_b >= 0.90 or pstate["current_step"] >= pstate["max_steps"]:
         st.balloons()
         st.success(
-            f"🎉 **Practice Session Complete!**\n\n"
-            f"- **Final Mean Skill Belief:** {mean_b:.3f}\n"
-            f"- **Questions Attempted:** {pstate['current_step']}\n"
-            f"- **Mastery Status:** {'Achieved (b_t ≥ 0.95)!' if mean_b >= 0.95 else 'Max Steps Reached'}"
+            f"🏆 **EXCELLENT WORK! ABSOLUTE MASTERY ACHIEVED!** 🏆\n\n"
+            f"- **Final Mean Skill Belief:** **{mean_b:.3f}** (Target ≥ 0.90)\n"
+            f"- **Steps to Mastery:** **{pstate['current_step']} steps**\n"
+            f"- **Mastery Status:** {'✅ Achieved Absolute Mastery (b_t ≥ 0.90)!' if mean_b >= 0.90 else '⏱️ Completed Max Steps'}"
         )
-        if st.button("Start New Session", type="primary"):
+
+        if st.button("Start New Practice Session", type="primary"):
             del st.session_state["pomdp_state"]
             st.rerun()
         st.stop()
+
 
     # Feedback Banner
     if pstate["last_feedback"] is not None:
