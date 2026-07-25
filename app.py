@@ -58,11 +58,11 @@ def load_d3qn_cached(model_path: str = "models/d3qn_tutor.pt"):
 
 # --- Page Configuration & Styling ---
 st.set_page_config(
-    page_title="POMDP-BKT Intelligent Tutoring System",
-    page_icon="🎓",
+    page_title="POMDP Intelligent Tutoring System",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 
 st.markdown(
     """
@@ -248,21 +248,21 @@ st.markdown(
 ensure_log_files_exist()
 
 # --- App Header ---
-st.markdown('<div class="main-header">🎓 Research-Grade POMDP Intelligent Tutoring System</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">POMDP Intelligent Tutoring System</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="sub-header">Bayesian Knowledge Tracing (BKT) + PyTorch Dueling Double Deep Q-Network (D3QN) A/B Testing Platform</div>',
+    '<div class="sub-header">Bayesian Knowledge Tracing (BKT) and PyTorch Dueling Double Deep Q-Network (D3QN) Experimental Evaluation Platform</div>',
     unsafe_allow_html=True,
 )
 
 # --- Sidebar Session Configuration (A/B Testing Setup) ---
-st.sidebar.title("🛠️ Session & A/B Configuration")
+st.sidebar.title("Session & Control Configuration")
 
-student_id = st.sidebar.text_input("👤 Student ID:", value="STU_101").strip()
+student_id = st.sidebar.text_input("Student Identifier:", value="STU_101").strip()
 if not student_id:
     student_id = "STU_ANONYMOUS"
 
 tutor_mode = st.sidebar.selectbox(
-    "⚡ Select Tutor Mode (A/B Testing):",
+    "Select Tutor Mode:",
     [
         "Experimental Mode (D3QN RL Tutor)",
         "Control Mode (Standard Linear Tutor)",
@@ -271,7 +271,7 @@ tutor_mode = st.sidebar.selectbox(
 
 app_mode = st.sidebar.radio(
     "Select View Mode:",
-    ["🎓 Live Interactive Tutor & Explainability", "📊 POMDP-BKT Simulation Dashboard"],
+    ["Live Interactive Tutor & Explainability", "POMDP-BKT Simulation Dashboard"],
 )
 
 model_path = "models/d3qn_tutor.pt"
@@ -280,10 +280,10 @@ d3qn_agent = load_d3qn_cached(model_path)
 st.sidebar.markdown("---")
 st.sidebar.subheader("PyTorch D3QN Model")
 if d3qn_agent is not None:
-    st.sidebar.success("✅ PyTorch D3QN Model Loaded (`models/d3qn_tutor.pt`)")
+    st.sidebar.success("PyTorch D3QN Model Loaded (`models/d3qn_tutor.pt`)")
 else:
-    st.sidebar.warning("⚠️ Model Not Found")
-    if st.sidebar.button("🔨 Train D3QN Agent Now"):
+    st.sidebar.warning("Model Checkpoint Not Found")
+    if st.sidebar.button("Train D3QN Agent Now"):
         with st.spinner("Training PyTorch D3QN Agent (5,000 episodes)..."):
             env = POMDPTutorEnv(max_steps=30)
             train_d3qn(env, total_episodes=5000, save_path=model_path, seed=42)
@@ -294,7 +294,7 @@ st.sidebar.markdown("---")
 st.sidebar.info(
     f"**Active Session Context:**\n"
     f"- **Student:** `{student_id}`\n"
-    f"- **Tutor Mode:** {'🤖 D3QN Adaptive' if 'Experimental' in tutor_mode else '📜 Linear Fixed'}\n"
+    f"- **Tutor Mode:** {'D3QN Adaptive' if 'Experimental' in tutor_mode else 'Linear Fixed'}\n"
     f"- **Log File:** `data/session_logs.csv`"
 )
 
@@ -302,8 +302,8 @@ st.sidebar.info(
 # ==============================================================================
 # MODE 1: POMDP-BKT SIMULATION DASHBOARD
 # ==============================================================================
-if app_mode == "📊 POMDP-BKT Simulation Dashboard":
-    st.header("📊 Comparative Policy Evaluation Dashboard")
+if app_mode == "POMDP-BKT Simulation Dashboard":
+    st.header("Comparative Policy Evaluation Dashboard")
     st.write(
         "Evaluate the **PyTorch Dueling Double DQN (D3QN)** policy against baseline tutors on the 4-KC POMDP environment."
     )
@@ -316,7 +316,7 @@ if app_mode == "📊 POMDP-BKT Simulation Dashboard":
     with c3:
         st.write("")
         st.write("")
-        run_btn = st.button("🚀 Run Benchmark Evaluation", type="primary", use_container_width=True)
+        run_btn = st.button("Run Benchmark Evaluation", type="primary", use_container_width=True)
 
     if run_btn or "pomdp_results" in st.session_state:
         if run_btn or "pomdp_results" not in st.session_state:
@@ -333,7 +333,7 @@ if app_mode == "📊 POMDP-BKT Simulation Dashboard":
         df, results = st.session_state["pomdp_results"]
 
         # Metric summary cards
-        st.subheader("🏆 Policy Performance Summary")
+        st.subheader("Policy Performance Summary")
         col_m1, col_m2, col_m3 = st.columns(3)
 
         for col, (policy_name, res) in zip([col_m1, col_m2, col_m3], results.items()):
@@ -347,7 +347,7 @@ if app_mode == "📊 POMDP-BKT Simulation Dashboard":
         st.markdown("---")
 
         # Line chart of belief trajectory
-        st.subheader("📈 Multi-Skill Belief Trajectory Progression")
+        st.subheader("Multi-Skill Belief Trajectory Progression")
         max_len = 31
         traj_df = pd.DataFrame({"Step": list(range(max_len))})
 
@@ -361,7 +361,7 @@ if app_mode == "📊 POMDP-BKT Simulation Dashboard":
         st.line_chart(traj_df.set_index("Step"), use_container_width=True)
 
         # Artifact plots display
-        st.subheader("🖼️ Generated Analysis Artifacts")
+        st.subheader("Generated Analysis Artifacts")
         img_c1, img_c2 = st.columns(2)
         with img_c1:
             if os.path.exists("artifacts/pomdp_belief_trajectories.png"):
@@ -374,20 +374,20 @@ if app_mode == "📊 POMDP-BKT Simulation Dashboard":
 # ==============================================================================
 # MODE 2: LIVE INTERACTIVE TUTOR & EXPLAINABILITY (A/B TESTING)
 # ==============================================================================
-elif app_mode == "🎓 Live Interactive Tutor & Explainability":
-    st.header("🎓 Interactive Live Math Tutor")
+elif app_mode == "Live Interactive Tutor & Explainability":
+    st.header("Interactive Live Math Tutor")
 
     is_experimental = "Experimental" in tutor_mode
     mode_badge_html = (
-        '<div class="mode-badge-exp">🤖 Experimental Mode (D3QN RL Tutor)</div>'
+        '<div class="mode-badge-exp">Experimental Mode (D3QN RL Tutor)</div>'
         if is_experimental
-        else '<div class="mode-badge-control">📜 Control Mode (Standard Linear Tutor)</div>'
+        else '<div class="mode-badge-control">Control Mode (Standard Linear Tutor)</div>'
     )
     st.markdown(f"Student ID: **`{student_id}`** | Tutor Mode: {mode_badge_html}", unsafe_allow_html=True)
     st.write("")
 
     if is_experimental and d3qn_agent is None:
-        st.error("⚠️ Trained D3QN Model (`models/d3qn_tutor.pt`) is missing. Please train the model from the sidebar first.")
+        st.error("Trained D3QN Model (`models/d3qn_tutor.pt`) is missing. Please train the model from the sidebar first.")
         st.stop()
 
     d3qn_tutor = D3QNTutor(d3qn_agent) if d3qn_agent is not None else None
@@ -438,37 +438,37 @@ elif app_mode == "🎓 Live Interactive Tutor & Explainability":
     curr_item: QuestionItem = pstate["current_item"]
 
     # Header Controls
-    col_hdr1, col_hdr2, col_hdr3 = st.columns([4, 1.2, 1.8])
+    col_hdr1, col_hdr2, col_hdr3 = st.columns([4, 1.5, 2.0])
     with col_hdr2:
-        if st.button("🔄 Restart Session"):
+        if st.button("Restart Session"):
             del st.session_state["pomdp_state"]
             st.rerun()
     with col_hdr3:
-        if st.button("⏹️ End Session & Survey", type="secondary"):
+        if st.button("End Session and Complete Survey", type="secondary"):
             pstate["session_ended"] = True
             st.rerun()
 
     st.markdown("---")
 
     # --- Live Multi-Skill BKT Belief Dashboard (4 KCs) ---
-    st.subheader("🧠 Live Bayesian Knowledge Tracing (BKT) 4-KC Beliefs")
+    st.subheader("Bayesian Knowledge Tracing (BKT) 4-KC Belief State Tracking")
     b_col1, b_col2, b_col3, b_col4, b_col5 = st.columns(5)
 
     skill_names = bkt.skills
     with b_col1:
-        st.metric(f"🔢 {skill_names[0]}", f"{beliefs[0]:.2f}")
+        st.metric(skill_names[0], f"{beliefs[0]:.2f}")
         st.progress(float(beliefs[0]))
     with b_col2:
-        st.metric(f"📊 {skill_names[1]}", f"{beliefs[1]:.2f}")
+        st.metric(skill_names[1], f"{beliefs[1]:.2f}")
         st.progress(float(beliefs[1]))
     with b_col3:
-        st.metric(f"✏️ {skill_names[2]}", f"{beliefs[2]:.2f}")
+        st.metric(skill_names[2], f"{beliefs[2]:.2f}")
         st.progress(float(beliefs[2]))
     with b_col4:
-        st.metric(f"📐 {skill_names[3]}", f"{beliefs[3]:.2f}")
+        st.metric(skill_names[3], f"{beliefs[3]:.2f}")
         st.progress(float(beliefs[3]))
     with b_col5:
-        st.metric("🌟 Mean Belief (b_t)", f"{mean_b:.2f}")
+        st.metric("Overall Mean Belief P(L_t)", f"{mean_b:.2f}")
         st.progress(float(mean_b))
 
     st.markdown("---")
@@ -486,7 +486,7 @@ elif app_mode == "🎓 Live Interactive Tutor & Explainability":
     # --- D3QN AI Explainability Panel (Displayed in Experimental Mode) ---
     if is_experimental and d3qn_tutor is not None:
         v_s, adv_list, q_list = d3qn_tutor.predict_explainability(current_obs)
-        with st.expander("🔍 **D3QN Neural Network AI Explainability & Q-Values**", expanded=True):
+        with st.expander("**D3QN Neural Network Explainability & Action Q-Values**", expanded=True):
             ex_col1, ex_col2 = st.columns([1, 2])
             with ex_col1:
                 st.markdown("#### State Value V(s)")
@@ -509,54 +509,53 @@ elif app_mode == "🎓 Live Interactive Tutor & Explainability":
 
     # Mastery Goal Banner
     if mean_b < 0.90 and not pstate.get("session_ended", False):
-        st.info(f"🎯 **Mastery Target:** Reaching Mean Skill Belief $\\bar{{b}}_t \\ge 0.90$ | Current: **{mean_b:.2f}** ({min(100.0, (mean_b/0.90)*100):.1f}% of goal)")
+        st.info(f"**Mastery Threshold Target:** Reaching Mean Skill Belief $\\bar{{b}}_t \\ge 0.90$ | Current: **{mean_b:.2f}** ({min(100.0, (mean_b/0.90)*100):.1f}% of target)")
 
     # Check Session Termination or End Session Trigger
     if mean_b >= 0.90 or pstate["current_step"] >= pstate["max_steps"] or pstate.get("session_ended", False):
-        st.balloons()
         st.success(
-            f"🏆 **SESSION COMPLETED!** 🏆\n\n"
+            f"**SESSION COMPLETED**\n\n"
             f"- **Student ID:** `{student_id}` | **Mode:** `{tutor_mode}`\n"
-            f"- **Final Mean Skill Belief:** **{mean_b:.3f}** (Target ≥ 0.90)\n"
+            f"- **Final Mean Skill Belief:** **{mean_b:.3f}** (Threshold ≥ 0.900)\n"
             f"- **Steps Attempted:** **{pstate['current_step']} steps**\n"
-            f"- **Mastery Status:** {'✅ Absolute Mastery Achieved!' if mean_b >= 0.90 else '📋 Session Finalized'}"
+            f"- **Mastery Status:** {'Mastery Threshold Exceeded' if mean_b >= 0.90 else 'Max Steps Reached'}"
         )
 
         st.markdown("---")
-        st.subheader("📝 Post-Session Affective Evaluation Survey")
-        st.write("Please complete this quick 30-second evaluation survey to log affective learning metrics.")
+        st.subheader("Post-Session Affective Evaluation Survey")
+        st.write("Please complete this evaluation survey to record affective interaction telemetry.")
 
         if pstate.get("survey_submitted", False):
-            st.success("✅ **Thank you! Your affective survey and session data have been logged to `data/affective_surveys.csv`.**")
+            st.success("Your affective survey response and session data have been logged to `data/affective_surveys.csv`.")
             if st.button("Start New Session", type="primary"):
                 del st.session_state["pomdp_state"]
                 st.rerun()
         else:
             with st.form(key="affective_survey_form"):
                 engagement = st.select_slider(
-                    "1. How engaging did you find this tutoring session?",
+                    "1. Rate the level of engagement during this session (1-5):",
                     options=[1, 2, 3, 4, 5],
                     value=4,
-                    format_func=lambda x: f"{x} ⭐ - " + {1: "Very Boring", 2: "Boring", 3: "Neutral", 4: "Engaging", 5: "Extremely Engaging"}[x],
+                    format_func=lambda x: f"{x} - " + {1: "Low Engagement", 2: "Slightly Engaging", 3: "Neutral", 4: "Engaging", 5: "High Engagement"}[x],
                 )
 
                 frustration = st.select_slider(
-                    "2. How frustrated did you feel during the difficult questions?",
+                    "2. Rate the level of frustration experienced during difficult tasks (1-5):",
                     options=[1, 2, 3, 4, 5],
                     value=2,
-                    format_func=lambda x: f"{x} - " + {1: "Not Frustrated At All", 2: "Slightly Frustrated", 3: "Moderately Frustrated", 4: "Frustrated", 5: "Extremely Frustrated"}[x],
+                    format_func=lambda x: f"{x} - " + {1: "Low Frustration", 2: "Slightly Frustrated", 3: "Moderate Frustration", 4: "Frustrated", 5: "High Frustration"}[x],
                 )
 
                 pacing = st.radio(
-                    "3. Did the system move too fast, too slow, or just right?",
-                    options=["Too Slow", "Just Right", "Too Fast"],
+                    "3. Select pacing feedback:",
+                    options=["Too Slow", "Optimal Pacing", "Too Fast"],
                     index=1,
                     horizontal=True,
                 )
 
-                comments = st.text_area("4. Additional comments or suggestions (optional):", value="")
+                comments = st.text_area("4. Additional observations or technical feedback (optional):", value="")
 
-                submit_survey_btn = st.form_submit_button("Submit Survey & Log Data", type="primary")
+                submit_survey_btn = st.form_submit_button("Submit Survey and Log Data", type="primary")
 
             if submit_survey_btn:
                 log_affective_survey(
@@ -577,14 +576,15 @@ elif app_mode == "🎓 Live Interactive Tutor & Explainability":
     if pstate["last_feedback"] is not None:
         fb = pstate["last_feedback"]
         if fb["is_correct"]:
-            st.success(f"✅ **Correct!** Explanation: *{fb['explanation']}* | Skill Belief Gain: **+{fb['delta_b']:.3f}**")
+            st.success(f"**Response Correct.** Solution: *{fb['explanation']}* | Skill Belief Gain: **+{fb['delta_b']:.3f}**")
         else:
-            st.error(f"❌ **Incorrect.** Correct answer: **{fb['correct_ans']}**. Explanation: *{fb['explanation']}*")
+            st.error(f"**Response Incorrect.** Expected Answer: **{fb['correct_ans']}**. Solution: *{fb['explanation']}*")
 
     # Present Action Content (Worked Example vs Problem vs Hint)
     st.markdown(
         f"### Step {pstate['current_step'] + 1} | Target KC: **{curr_item.kc_name}** | Action: **{curr_act_name}**"
     )
+
 
     if curr_act_idx == 3:  # Worked Example Action
         st.markdown(
@@ -594,7 +594,8 @@ elif app_mode == "🎓 Live Interactive Tutor & Explainability":
             f'</div>',
             unsafe_allow_html=True,
         )
-        if st.button("I have studied this worked example ➔ Continue", type="primary"):
+        if st.button("Confirm Worked Example Completion", type="primary"):
+
             resp_time = time.time() - pstate["step_start_time"]
             prev_b = bkt.get_mean_belief()
             t_kc = pstate["target_skill_idx"]
