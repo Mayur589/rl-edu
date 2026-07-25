@@ -35,6 +35,8 @@ from src.d3qn_agent import D3QNAgent, D3QNTutor, train_d3qn
 from src.evaluator import POMDPHeuristicTutor, evaluate_pomdp_tutor, run_pomdp_benchmark
 from src.curriculum import KC_NAMES, QuestionItem, get_curriculum_question
 from src.logger import log_interaction, log_affective_survey, ensure_log_files_exist
+from src.analytics import SessionAnalyzer
+
 
 
 # --- Model Cache ---
@@ -254,7 +256,14 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- Sidebar Session Configuration (A/B Testing Setup) ---
+# --- Sidebar Navigation Menu ---
+st.sidebar.title("Navigation Menu")
+page_selection = st.sidebar.radio(
+    "Select Page:",
+    ["Tutoring Session", "Supervisor Analytics"],
+)
+
+st.sidebar.markdown("---")
 st.sidebar.title("Session & Control Configuration")
 
 student_id = st.sidebar.text_input("Student Identifier:", value="STU_101").strip()
@@ -269,10 +278,12 @@ tutor_mode = st.sidebar.selectbox(
     ],
 )
 
-app_mode = st.sidebar.radio(
-    "Select View Mode:",
-    ["Live Interactive Tutor & Explainability", "POMDP-BKT Simulation Dashboard"],
-)
+app_mode = "Live Interactive Tutor & Explainability"
+if page_selection == "Tutoring Session":
+    app_mode = st.sidebar.radio(
+        "Select View Mode:",
+        ["Live Interactive Tutor & Explainability", "POMDP-BKT Simulation Dashboard"],
+    )
 
 model_path = "models/d3qn_tutor.pt"
 d3qn_agent = load_d3qn_cached(model_path)
@@ -300,9 +311,63 @@ st.sidebar.info(
 
 
 # ==============================================================================
+# SUPERVISOR ANALYTICS PAGE
+# ==============================================================================
+if page_selection == "Supervisor Analytics":
+    st.header("Supervisor Telemetry Analytics Dashboard")
+    st.write(
+        "Statistical telemetry analysis comparing the **RL Experimental Group (D3QN Agent)** against the **Control Group (Standard Linear Tutor)**."
+    )
+
+    analyzer = SessionAnalyzer()
+    gains_df = analyzer.get_learning_gains()
+    steps_df = analyzer.get_steps_to_mastery()
+    affective_df = analyzer.get_affective_averages()
+    actions_df = analyzer.get_action_distribution()
+
+    # Extract KPI Values
+    rl_nlg = 0.0
+    control_nlg = 0.0
+    if not gains_df.empty:
+        rl_match = gains_df[gains_df["Mode"] == "RL Mode"]
+        ctrl_match = gains_df[gains_df["Mode"] == "Control Mode"]
+        if not rl_match.empty:
+            rl_nlg = float(rl_match.iloc[0]["Mean_NLG"])
+        if not ctrl_match.empty:
+            control_nlg = float(ctrl_match.iloc[0]["Mean_NLG"])
+
+    rl_steps = 0.0
+    if not steps_df.empty:
+        rl_steps_df = steps_df[steps_df["Mode"] == "RL Mode"]
+        if not rl_steps_df.empty:
+            rl_steps = float(rl_steps_df["steps"].mean())
+
+    total_sessions = len(steps_df) if not steps_df.empty else 0
+    total_surveys = int(affective_df["Survey_Count"].sum()) if not affective_df.empty else 0
+
+    # Top KPI Metric Cards
+    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+    with kpi1:
+        st.metric("Total Sessions Logged", f"{total_sessions}")
+    with kpi2:
+        st.metric("RL Mean NLG", f"{rl_nlg:.3f}")
+    with kpi3:
+        st.metric("Control Mean NLG", f"{control_nlg:.3f}")
+    with kpi4:
+        st.metric("RL Avg Steps to Mastery", f"{rl_steps:.1f}")
+    with kpi5:
+        st.metric("Affective Surveys Logged", f"{total_surveys}")
+
+    st.markdown("---")
+    st.info("Interactive statistical charts will be rendered below in Step 4.")
+    st.stop()
+
+
+# ==============================================================================
 # MODE 1: POMDP-BKT SIMULATION DASHBOARD
 # ==============================================================================
-if app_mode == "POMDP-BKT Simulation Dashboard":
+elif app_mode == "POMDP-BKT Simulation Dashboard":
+
     st.header("Comparative Policy Evaluation Dashboard")
     st.write(
         "Evaluate the **PyTorch Dueling Double DQN (D3QN)** policy against baseline tutors on the 4-KC POMDP environment."
