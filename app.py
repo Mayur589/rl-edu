@@ -292,17 +292,58 @@ model_path = "models/d3qn_tutor.pt"
 d3qn_agent = load_d3qn_cached(model_path)
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("PyTorch D3QN Model")
+st.sidebar.subheader("PyTorch D3QN Model & Training Controls")
 if d3qn_agent is not None:
     st.sidebar.success("PyTorch D3QN Model Loaded (`models/d3qn_tutor.pt`)")
 else:
     st.sidebar.warning("Model Checkpoint Not Found")
-    if st.sidebar.button("Train D3QN Agent Now"):
-        with st.spinner("Training PyTorch D3QN Agent (5,000 episodes)..."):
+
+with st.sidebar.expander("Advanced Model Training Controls", expanded=d3qn_agent is None):
+    st.write("Configure hyperparameters to execute PyTorch D3QN policy training:")
+    train_episodes = st.slider("Total Episodes:", min_value=1000, max_value=25000, value=5000, step=1000)
+    train_lr = st.select_slider(
+        "Learning Rate:",
+        options=[0.00005, 0.0001, 0.0003, 0.0005, 0.001],
+        value=0.0001,
+        format_func=lambda x: f"{x:.5f}",
+    )
+    train_buffer = st.selectbox("Replay Buffer Capacity:", options=[50000, 100000, 200000], index=1)
+    train_seed = st.number_input("Training Seed:", min_value=1, max_value=9999, value=42, step=1)
+
+    if st.button("Execute PyTorch D3QN Training Run", type="primary", use_container_width=True):
+        st.write("---")
+        st.write("#### Training Progress Telemetry")
+        pbar = st.progress(0)
+        status_text = st.empty()
+        metric_c1, metric_c2 = st.columns(2)
+        with metric_c1:
+            m_rew = st.empty()
+        with metric_c2:
+            m_eps = st.empty()
+
+        def ui_callback(ep: int, total: int, reward: float, eps: float, buf_size: int) -> None:
+            pct = int((ep / float(total)) * 100)
+            pbar.progress(pct)
+            status_text.text(f"Episode {ep}/{total} ({pct}%) | Buffer: {buf_size}")
+            m_rew.metric("Last Episode Reward", f"{reward:.2f}")
+            m_eps.metric("Current Epsilon", f"{eps:.3f}")
+
+        with st.spinner(f"Training PyTorch D3QN Agent ({train_episodes} episodes)..."):
             env = POMDPTutorEnv(max_steps=30)
-            train_d3qn(env, total_episodes=5000, save_path=model_path, seed=42)
+            train_d3qn(
+                env=env,
+                total_episodes=train_episodes,
+                learning_rate=train_lr,
+                buffer_capacity=train_buffer,
+                save_path=model_path,
+                seed=train_seed,
+                callback=ui_callback,
+            )
             st.cache_resource.clear()
+            st.success(f"Training complete! Model saved to `{model_path}`.")
+            time.sleep(1)
             st.rerun()
+
 
 st.sidebar.markdown("---")
 st.sidebar.info(

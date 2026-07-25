@@ -383,39 +383,53 @@ class D3QNTutor(BaseTutor):
         pass
 
 
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+
 def train_d3qn(
     env: POMDPTutorEnv,
     total_episodes: int = 5000,
     max_steps_per_ep: int = 30,
+    learning_rate: float = 1e-4,
+    buffer_capacity: int = 100000,
     save_path: str = "models/d3qn_tutor.pt",
     seed: int = 42,
+    callback: Optional[Callable[[int, int, float, float, int], None]] = None,
 ) -> D3QNAgent:
-    """Trains D3QNAgent on POMDPTutorEnv over 5,000 episodes and saves checkpoint.
+    """Trains D3QNAgent on POMDPTutorEnv with configurable hyperparameters and callback.
 
     Args:
         env: POMDPTutorEnv environment instance.
         total_episodes: Number of episodes to train (default 5,000).
         max_steps_per_ep: Maximum steps per episode.
+        learning_rate: Optimizer learning rate.
+        buffer_capacity: Replay buffer capacity transitions.
         save_path: Filepath destination for model checkpoint.
         seed: Random seed.
+        callback: Optional callback function receiving (ep, total_ep, ep_reward, epsilon, buffer_size).
 
     Returns:
         D3QNAgent: Trained agent instance.
     """
     set_d3qn_seeds(seed)
-    agent = D3QNAgent(state_dim=9, action_dim=5, learning_rate=1e-4, buffer_capacity=100000, seed=seed)
-
+    agent = D3QNAgent(
+        state_dim=9,
+        action_dim=5,
+        learning_rate=learning_rate,
+        buffer_capacity=buffer_capacity,
+        seed=seed,
+    )
 
     eps_start = 1.0
     eps_min = 0.05
-    explore_episodes = min(3000, total_episodes)
+    explore_episodes = min(int(total_episodes * 0.6), 3000)
     target_update_freq = 20  # Update target network every 20 episodes
 
-    print(f"\n--- Training PyTorch D3QN Agent ({total_episodes} Episodes, Seed={seed}) ---")
+    print(f"\n--- Training PyTorch D3QN Agent ({total_episodes} Episodes, Seed={seed}, LR={learning_rate}) ---")
     print(f"Exploration Phase: First {explore_episodes} episodes | Exploitation Phase: Remaining {total_episodes - explore_episodes} episodes\n")
 
     for ep in range(1, total_episodes + 1):
-        # Explicit Epsilon Schedule: Linear decay for first 3,000 episodes, constant 0.05 thereafter
+        # Explicit Epsilon Schedule: Linear decay for exploration phase
         if ep <= explore_episodes:
             epsilon = eps_start - (ep / float(explore_episodes)) * (eps_start - eps_min)
         else:
@@ -441,11 +455,15 @@ def train_d3qn(
         if ep % target_update_freq == 0:
             agent.update_target_network()
 
+        if callback is not None and (ep % 25 == 0 or ep == total_episodes or ep == 1):
+            callback(ep, total_episodes, ep_reward, epsilon, len(agent.memory))
+
         if ep % 500 == 0 or ep == total_episodes:
             print(f"Episode {ep:5d}/{total_episodes} | Ep Reward: {ep_reward:6.2f} | Epsilon: {epsilon:.3f} | Buffer: {len(agent.memory)}")
 
     agent.save(save_path)
     return agent
+
 
 
 if __name__ == "__main__":
