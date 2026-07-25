@@ -67,60 +67,182 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap');
+
+    /* Global Base Dark Theme */
+    html, body, [data-testid="stAppViewContainer"] {
+        background-color: #09090B !important;
+        color: #FAFAFA !important;
+        font-family: 'Inter', -apple-system, sans-serif !important;
+    }
+
+    [data-testid="stSidebar"] {
+        background-color: #121215 !important;
+        border-right: 1px solid #27272A !important;
+    }
+
+    /* Keyframe Animations */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(12px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @keyframes pulseGlow {
+        0% { border-color: rgba(255, 255, 255, 0.15); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.05); }
+        50% { border-color: rgba(255, 255, 255, 0.45); box-shadow: 0 0 15px 0 rgba(255, 255, 255, 0.1); }
+        100% { border-color: rgba(255, 255, 255, 0.15); box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.05); }
+    }
+
+    /* Headers */
     .main-header {
-        font-size: 2.2rem;
+        font-family: 'Outfit', sans-serif;
+        font-size: 2.3rem;
         font-weight: 800;
-        color: #0F172A;
-        margin-bottom: 0.2rem;
+        letter-spacing: -0.03em;
+        background: linear-gradient(180deg, #FFFFFF 0%, #A1A1AA 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.3rem;
+        animation: fadeInUp 0.5s ease-out;
     }
+
     .sub-header {
-        font-size: 1.05rem;
-        color: #475569;
-        margin-bottom: 1.5rem;
+        font-size: 1.02rem;
+        color: #A1A1AA;
+        margin-bottom: 1.8rem;
+        font-weight: 400;
+        letter-spacing: -0.01em;
     }
+
+    /* Modern Monochrome Containers */
     .question-box {
-        background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
-        border-left: 6px solid #2563EB;
-        border-radius: 10px;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
+        background: #18181B;
+        border: 1px solid #27272A;
+        border-left: 4px solid #FFFFFF;
+        border-radius: 12px;
+        padding: 1.8rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: transform 0.25s ease, border-color 0.25s ease;
     }
+    .question-box:hover {
+        transform: translateY(-2px);
+        border-color: #3F3F46;
+    }
+
     .worked-example-box {
-        background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
-        border-left: 6px solid #D97706;
-        border-radius: 10px;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
-        color: #78350F;
+        background: #141417;
+        border: 1px solid #3F3F46;
+        border-left: 4px solid #E4E4E7;
+        border-radius: 12px;
+        padding: 1.8rem;
+        margin-bottom: 1.5rem;
+        color: #F4F4F5;
+        animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
+
     .hint-box {
-        background-color: #F0FDF4;
-        border: 1px solid #BBF7D0;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        color: #166534;
+        background-color: #121215;
+        border: 1px solid #27272A;
+        border-left: 4px solid #A1A1AA;
+        border-radius: 10px;
+        padding: 1.2rem;
+        margin-bottom: 1.2rem;
+        color: #D4D4D8;
+        animation: fadeInUp 0.3s ease-out;
     }
+
+    /* High Contrast Mode Badges */
     .mode-badge-control {
-        background-color: #E2E8F0;
-        color: #334155;
-        border-radius: 6px;
-        padding: 0.3rem 0.8rem;
+        background-color: #27272A;
+        color: #E4E4E7;
+        border: 1px solid #3F3F46;
+        border-radius: 20px;
+        padding: 0.35rem 0.9rem;
+        font-size: 0.85rem;
         font-weight: 600;
         display: inline-block;
+        letter-spacing: 0.02em;
     }
+
     .mode-badge-exp {
-        background-color: #DCFCE7;
-        color: #15803D;
-        border-radius: 6px;
-        padding: 0.3rem 0.8rem;
-        font-weight: 600;
+        background-color: #FFFFFF;
+        color: #09090B;
+        border: 1px solid #FFFFFF;
+        border-radius: 20px;
+        padding: 0.35rem 0.9rem;
+        font-size: 0.85rem;
+        font-weight: 700;
         display: inline-block;
+        letter-spacing: 0.02em;
+        box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+    }
+
+    /* Metric cards styling */
+    [data-testid="stMetric"] {
+        background-color: #18181B;
+        border: 1px solid #27272A;
+        border-radius: 10px;
+        padding: 0.8rem 1rem;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    [data-testid="stMetric"]:hover {
+        transform: translateY(-2px);
+        border-color: #3F3F46;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #A1A1AA !important;
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
+    }
+    [data-testid="stMetricValue"] {
+        color: #FFFFFF !important;
+        font-family: 'Outfit', sans-serif !important;
+        font-weight: 700 !important;
+    }
+
+    /* Streamlit Progress Bar */
+    .stProgress > div > div > div > div {
+        background-color: #FFFFFF !important;
+    }
+
+    /* Streamlit Buttons */
+    .stButton > button {
+        background-color: #18181B !important;
+        color: #FFFFFF !important;
+        border: 1px solid #3F3F46 !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+    .stButton > button:hover {
+        background-color: #FFFFFF !important;
+        color: #09090B !important;
+        border-color: #FFFFFF !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 15px rgba(255, 255, 255, 0.15) !important;
+    }
+    .stButton > button[kind="primary"] {
+        background-color: #FFFFFF !important;
+        color: #09090B !important;
+        border: 1px solid #FFFFFF !important;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background-color: #E4E4E7 !important;
+        color: #000000 !important;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
+
 
 # Initialize CSV log directory
 ensure_log_files_exist()
