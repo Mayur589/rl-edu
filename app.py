@@ -28,7 +28,7 @@ import torch
 
 # Force PyTorch single-threading to prevent Streamlit watcher thread segmentation faults on macOS
 torch.set_num_threads(1)
-torch.set_grad_enabled(False)
+
 
 
 from src.bkt_engine import BKTEngine

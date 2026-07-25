@@ -412,57 +412,59 @@ def train_d3qn(
         D3QNAgent: Trained agent instance.
     """
     set_d3qn_seeds(seed)
-    agent = D3QNAgent(
-        state_dim=9,
-        action_dim=5,
-        learning_rate=learning_rate,
-        buffer_capacity=buffer_capacity,
-        seed=seed,
-    )
+    with torch.enable_grad():
+        agent = D3QNAgent(
+            state_dim=9,
+            action_dim=5,
+            learning_rate=learning_rate,
+            buffer_capacity=buffer_capacity,
+            seed=seed,
+        )
 
-    eps_start = 1.0
-    eps_min = 0.05
-    explore_episodes = min(int(total_episodes * 0.6), 3000)
-    target_update_freq = 20  # Update target network every 20 episodes
+        eps_start = 1.0
+        eps_min = 0.05
+        explore_episodes = min(int(total_episodes * 0.6), 3000)
+        target_update_freq = 20  # Update target network every 20 episodes
 
-    print(f"\n--- Training PyTorch D3QN Agent ({total_episodes} Episodes, Seed={seed}, LR={learning_rate}) ---")
-    print(f"Exploration Phase: First {explore_episodes} episodes | Exploitation Phase: Remaining {total_episodes - explore_episodes} episodes\n")
+        print(f"\n--- Training PyTorch D3QN Agent ({total_episodes} Episodes, Seed={seed}, LR={learning_rate}) ---")
+        print(f"Exploration Phase: First {explore_episodes} episodes | Exploitation Phase: Remaining {total_episodes - explore_episodes} episodes\n")
 
-    for ep in range(1, total_episodes + 1):
-        # Explicit Epsilon Schedule: Linear decay for exploration phase
-        if ep <= explore_episodes:
-            epsilon = eps_start - (ep / float(explore_episodes)) * (eps_start - eps_min)
-        else:
-            epsilon = eps_min
+        for ep in range(1, total_episodes + 1):
+            # Explicit Epsilon Schedule: Linear decay for exploration phase
+            if ep <= explore_episodes:
+                epsilon = eps_start - (ep / float(explore_episodes)) * (eps_start - eps_min)
+            else:
+                epsilon = eps_min
 
-        obs, _ = env.reset(seed=seed + ep)
-        ep_reward = 0.0
+            obs, _ = env.reset(seed=seed + ep)
+            ep_reward = 0.0
 
-        for step in range(max_steps_per_ep):
-            action = agent.select_action(obs, epsilon=epsilon)
-            next_obs, reward, terminated, truncated, _ = env.step(action)
-            done = terminated or truncated
+            for step in range(max_steps_per_ep):
+                action = agent.select_action(obs, epsilon=epsilon)
+                next_obs, reward, terminated, truncated, _ = env.step(action)
+                done = terminated or truncated
 
-            agent.memory.push(obs, action, reward, next_obs, done)
-            agent.train_step()
+                agent.memory.push(obs, action, reward, next_obs, done)
+                agent.train_step()
 
-            ep_reward += reward
-            obs = next_obs
+                ep_reward += reward
+                obs = next_obs
 
-            if done:
-                break
+                if done:
+                    break
 
-        if ep % target_update_freq == 0:
-            agent.update_target_network()
+            if ep % target_update_freq == 0:
+                agent.update_target_network()
 
-        if callback is not None and (ep % 25 == 0 or ep == total_episodes or ep == 1):
-            callback(ep, total_episodes, ep_reward, epsilon, len(agent.memory))
+            if callback is not None and (ep % 25 == 0 or ep == total_episodes or ep == 1):
+                callback(ep, total_episodes, ep_reward, epsilon, len(agent.memory))
 
-        if ep % 500 == 0 or ep == total_episodes:
-            print(f"Episode {ep:5d}/{total_episodes} | Ep Reward: {ep_reward:6.2f} | Epsilon: {epsilon:.3f} | Buffer: {len(agent.memory)}")
+            if ep % 500 == 0 or ep == total_episodes:
+                print(f"Episode {ep:5d}/{total_episodes} | Ep Reward: {ep_reward:6.2f} | Epsilon: {epsilon:.3f} | Buffer: {len(agent.memory)}")
 
-    agent.save(save_path)
-    return agent
+        agent.save(save_path)
+        return agent
+
 
 
 
