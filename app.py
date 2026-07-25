@@ -20,8 +20,11 @@ import matplotlib
 matplotlib.use("Agg")  # Prevent GUI thread crashes on macOS
 import numpy as np
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 import torch
+
 
 # Force PyTorch single-threading to prevent Streamlit watcher thread segmentation faults on macOS
 torch.set_num_threads(1)
@@ -359,8 +362,139 @@ if page_selection == "Supervisor Analytics":
         st.metric("Affective Surveys Logged", f"{total_surveys}")
 
     st.markdown("---")
-    st.info("Interactive statistical charts will be rendered below in Step 4.")
+
+    # --------------------------------------------------------------------------
+    # Interactive Plotly Analytics Section
+    # --------------------------------------------------------------------------
+    st.subheader("Comparative Statistical Efficacy and Telemetry")
+    chart_col1, chart_col2 = st.columns(2)
+
+    # Chart 1: Learning Efficacy (Mean NLG Comparison)
+    with chart_col1:
+        st.markdown("#### 1. Learning Efficacy (Mean NLG)")
+        if not gains_df.empty:
+            fig_nlg = px.bar(
+                gains_df,
+                x="Mode",
+                y="Mean_NLG",
+                error_y="Std_NLG",
+                color="Mode",
+                color_discrete_map={"RL Mode": "#FFFFFF", "Control Mode": "#71717A"},
+                title="Mean Normalized Learning Gain (NLG) by Mode",
+                labels={"Mean_NLG": "Mean NLG", "Mode": "Tutor Group"},
+                template="plotly_dark",
+            )
+            fig_nlg.update_layout(
+                paper_bgcolor="#18181B",
+                plot_bgcolor="#18181B",
+                font=dict(color="#FAFAFA"),
+                showlegend=False,
+            )
+            st.plotly_chart(fig_nlg, use_container_width=True)
+        else:
+            st.info("No learning gain telemetry available yet.")
+
+    # Chart 2: Learning Efficiency (Steps to Mastery Distribution Box Plot)
+    with chart_col2:
+        st.markdown("#### 2. Learning Efficiency (Time-on-Task)")
+        if not steps_df.empty:
+            fig_steps = px.box(
+                steps_df,
+                x="Mode",
+                y="steps",
+                color="Mode",
+                color_discrete_map={"RL Mode": "#FFFFFF", "Control Mode": "#71717A"},
+                title="Distribution of Steps to Mastery",
+                labels={"steps": "Steps to Mastery", "Mode": "Tutor Group"},
+                template="plotly_dark",
+            )
+            fig_steps.update_layout(
+                paper_bgcolor="#18181B",
+                plot_bgcolor="#18181B",
+                font=dict(color="#FAFAFA"),
+                showlegend=False,
+            )
+            st.plotly_chart(fig_steps, use_container_width=True)
+        else:
+            st.info("No step telemetry available yet.")
+
+    st.markdown("---")
+
+    chart_col3, chart_col4 = st.columns(2)
+
+    # Chart 3: Agent Explainability (Action Distribution Stacked Bar Chart)
+    with chart_col3:
+        st.markdown("#### 3. Agent Explainability (Action Distribution)")
+        if not actions_df.empty:
+            fig_act = px.bar(
+                actions_df,
+                x="action_name",
+                y="percentage",
+                color="Mode",
+                barmode="group",
+                color_discrete_map={"RL Mode": "#FFFFFF", "Control Mode": "#71717A"},
+                title="Action Choice Percentage Breakdown",
+                labels={"percentage": "Percentage (%)", "action_name": "Pedagogical Action", "Mode": "Group"},
+                template="plotly_dark",
+            )
+            fig_act.update_layout(
+                paper_bgcolor="#18181B",
+                plot_bgcolor="#18181B",
+                font=dict(color="#FAFAFA"),
+            )
+            st.plotly_chart(fig_act, use_container_width=True)
+        else:
+            st.info("No action selection telemetry available yet.")
+
+    # Chart 4: Affective Impact (Engagement & Frustration Comparison)
+    with chart_col4:
+        st.markdown("#### 4. Affective Impact (Survey Telemetry)")
+        if not affective_df.empty:
+            aff_melted = affective_df.melt(
+                id_vars=["Mode"],
+                value_vars=["Mean_Engagement", "Mean_Frustration"],
+                var_name="Affective_Variable",
+                value_name="Score",
+            )
+            aff_melted["Affective_Variable"] = aff_melted["Affective_Variable"].replace({
+                "Mean_Engagement": "Engagement (1-5)",
+                "Mean_Frustration": "Frustration (1-5)",
+            })
+
+            fig_aff = px.bar(
+                aff_melted,
+                x="Affective_Variable",
+                y="Score",
+                color="Mode",
+                barmode="group",
+                color_discrete_map={"RL Mode": "#FFFFFF", "Control Mode": "#71717A"},
+                title="Self-Reported Affective Metrics Comparison",
+                labels={"Score": "Mean Likert Score (1-5)", "Affective_Variable": "Variable"},
+                template="plotly_dark",
+            )
+            fig_aff.update_layout(
+                paper_bgcolor="#18181B",
+                plot_bgcolor="#18181B",
+                font=dict(color="#FAFAFA"),
+                yaxis=dict(range=[0, 5.5]),
+            )
+            st.plotly_chart(fig_aff, use_container_width=True)
+        else:
+            st.info("No affective survey telemetry available yet.")
+
+    st.markdown("---")
+
+    # Raw telemetry data inspection table
+    with st.expander("View Raw Telemetry Log Data", expanded=False):
+        sess_df, sur_df = analyzer.load_data()
+        st.markdown("##### Session Interactions (`data/session_logs.csv`)")
+        st.dataframe(sess_df, use_container_width=True)
+
+        st.markdown("##### Affective Surveys (`data/affective_surveys.csv`)")
+        st.dataframe(sur_df, use_container_width=True)
+
     st.stop()
+
 
 
 # ==============================================================================
