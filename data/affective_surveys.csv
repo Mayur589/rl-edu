@@ -1,0 +1,3 @@
+timestamp,student_id,tutor_mode,engagement_score,frustration_score,pacing_feedback,comments
+2026-07-25T01:06:18.177132,TEST_STU_101,Experimental Mode (D3QN RL Tutor),5,1,Just Right,Great tutoring experience!
+2026-07-25T01:12:54.415110,STU_101,Experimental Mode (D3QN RL Tutor),4,2,Just Right,
